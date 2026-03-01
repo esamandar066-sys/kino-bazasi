@@ -7,13 +7,13 @@ A movie catalog application where users can register, login, browse movies, add 
 - **Frontend:** React + TypeScript + Vite + TailwindCSS + shadcn/ui
 - **Backend:** Express.js + TypeScript
 - **Database:** PostgreSQL (Drizzle ORM)
-- **Auth:** Replit Auth (Google login) + Phone auth via Telegram bot
+- **Auth:** Replit Auth (Google login) + Phone auth via SMS (Twilio) with Telegram fallback
 - **Bot:** Telegram bot with inline keyboard buttons for admin + users
 - **PWA:** Service worker, manifest.json, installable on mobile devices
 
 ## Key Features
 - Google login via Replit Auth
-- Phone number login with Telegram verification codes (bot sends code directly)
+- Phone number login with SMS verification codes (Twilio), Telegram as fallback
 - Movie CRUD operations
 - Movie categories and search
 - Star rating system (1-5)
@@ -36,6 +36,7 @@ server/
   storage.ts         - Database storage layer
   routes.ts          - API route handlers
   telegram-bot.ts    - Telegram bot service (admin + user features)
+  twilio-sms.ts      - Twilio SMS service for verification codes
   replit_integrations/auth/ - Replit Auth setup
 
 client/src/

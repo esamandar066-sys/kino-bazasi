@@ -95,9 +95,9 @@ export const api = {
     sendCode: {
       method: 'POST' as const,
       path: '/api/auth/phone/send-code' as const,
-      input: z.object({ phoneNumber: z.string().min(9), telegramUsername: z.string().min(1) }),
+      input: z.object({ phoneNumber: z.string().min(9), telegramUsername: z.string().optional() }),
       responses: {
-        200: z.object({ message: z.string(), telegramBotUrl: z.string() }),
+        200: z.object({ message: z.string(), codeSentDirectly: z.boolean(), method: z.string(), telegramBotUrl: z.string().optional() }),
         400: errorSchemas.validation,
       },
     },

@@ -22,6 +22,7 @@ export default function Login() {
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [telegramUrl, setTelegramUrl] = useState("");
+  const [verifyMethod, setVerifyMethod] = useState<string>("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [telegramVerified, setTelegramVerified] = useState(false);
@@ -42,7 +43,7 @@ export default function Login() {
   }, [isAuthenticated, setLocation, stopPolling]);
 
   useEffect(() => {
-    if (step === "code" && phoneNumber) {
+    if (step === "code" && phoneNumber && verifyMethod !== "sms") {
       pollingRef.current = setInterval(async () => {
         try {
           const res = await fetch(`/api/auth/phone/check-telegram?phoneNumber=${encodeURIComponent(phoneNumber)}`, {
@@ -72,16 +73,16 @@ export default function Login() {
       toast({ title: "Telefon raqamni to'liq kiriting", variant: "destructive" });
       return;
     }
-    if (!telegramUsername || telegramUsername.length < 2) {
-      toast({ title: "Telegram username kiriting", variant: "destructive" });
-      return;
-    }
     setIsSending(true);
     try {
+      const body: any = { phoneNumber };
+      if (telegramUsername && telegramUsername.length >= 2) {
+        body.telegramUsername = telegramUsername.replace(/^@/, "");
+      }
       const res = await fetch("/api/auth/phone/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber, telegramUsername: telegramUsername.replace(/^@/, "") }),
+        body: JSON.stringify(body),
         credentials: "include",
       });
       const data = await res.json();
@@ -89,10 +90,15 @@ export default function Login() {
         toast({ title: data.message || "Xatolik", variant: "destructive" });
         return;
       }
+      setVerifyMethod(data.method || "");
       if (data.codeSentDirectly) {
         setTelegramUrl("");
         setStep("code");
-        toast({ title: "Tasdiqlash kodi Telegram botga yuborildi!" });
+        if (data.method === "sms") {
+          toast({ title: "Tasdiqlash kodi SMS orqali yuborildi!" });
+        } else {
+          toast({ title: "Tasdiqlash kodi Telegram orqali yuborildi!" });
+        }
       } else {
         setTelegramUrl(data.telegramBotUrl || "");
         setStep("code");
@@ -176,7 +182,7 @@ export default function Login() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">Telegram username</label>
+                      <label className="text-sm font-medium text-foreground">Telegram username <span className="text-muted-foreground font-normal">(ixtiyoriy)</span></label>
                       <div className="relative">
                         <SiTelegram className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-blue-400" />
                         <Input
@@ -190,7 +196,7 @@ export default function Login() {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Tasdiqlash kodi Telegram bot orqali yuboriladi
+                      Tasdiqlash kodi SMS orqali yuboriladi
                     </p>
                     <Button
                       onClick={handleSendCode}
@@ -198,8 +204,8 @@ export default function Login() {
                       className="w-full"
                       data-testid="button-send-code"
                     >
-                      {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <SiTelegram className="w-4 h-4 mr-2" />}
-                      Kod yuborish
+                      {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Phone className="w-4 h-4 mr-2" />}
+                      SMS kod yuborish
                     </Button>
                   </>
                 ) : telegramVerified ? (

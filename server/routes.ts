@@ -6,6 +6,7 @@ import { setupAuth } from "./replit_integrations/auth/replitAuth";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { startTelegramBot, getBotUsername, sendVerificationCode } from "./telegram-bot";
+import { sendSmsCode } from "./twilio-sms";
 import { db } from "./db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
@@ -67,9 +68,13 @@ export async function registerRoutes(
       await storage.createVerificationCode(phoneNumber, code);
       await storage.upsertUserByPhone(phoneNumber, undefined, telegramUsername);
 
-      const botName = getBotUsername();
-      if (!botName) {
-        return res.status(500).json({ message: "Telegram bot hali ishga tushmagan. Biroz kuting." });
+      const smsSent = await sendSmsCode(phoneNumber, code);
+      if (smsSent) {
+        return res.json({
+          message: "Tasdiqlash kodi SMS orqali yuborildi",
+          codeSentDirectly: true,
+          method: "sms",
+        });
       }
 
       const existingUser = await storage.getUserByPhone(phoneNumber);
@@ -77,35 +82,45 @@ export async function registerRoutes(
         const sent = await sendVerificationCode(existingUser.telegramChatId, code, phoneNumber);
         if (sent) {
           return res.json({
-            message: "Tasdiqlash kodi Telegram botga yuborildi",
+            message: "Tasdiqlash kodi Telegram orqali yuborildi",
             codeSentDirectly: true,
+            method: "telegram",
           });
         }
       }
 
-      const userByTg = await storage.getUserByTelegramUsername(telegramUsername);
-      if (userByTg?.telegramChatId) {
-        await storage.upsertUserByPhone(phoneNumber, userByTg.telegramChatId, telegramUsername);
-        const sent = await sendVerificationCode(userByTg.telegramChatId, code, phoneNumber);
-        if (sent) {
-          return res.json({
-            message: "Tasdiqlash kodi Telegram botga yuborildi",
-            codeSentDirectly: true,
-          });
+      if (telegramUsername) {
+        const userByTg = await storage.getUserByTelegramUsername(telegramUsername);
+        if (userByTg?.telegramChatId) {
+          await storage.upsertUserByPhone(phoneNumber, userByTg.telegramChatId, telegramUsername);
+          const sent = await sendVerificationCode(userByTg.telegramChatId, code, phoneNumber);
+          if (sent) {
+            return res.json({
+              message: "Tasdiqlash kodi Telegram orqali yuborildi",
+              codeSentDirectly: true,
+              method: "telegram",
+            });
+          }
         }
       }
 
-      const telegramBotUrl = `https://t.me/${botName}?start=verify_${phoneNumber}`;
+      const botName = getBotUsername();
+      if (botName) {
+        const telegramBotUrl = `https://t.me/${botName}?start=verify_${phoneNumber}`;
+        return res.json({
+          message: "SMS yuborib bo'lmadi. Telegram bot orqali oling",
+          telegramBotUrl,
+          codeSentDirectly: false,
+          method: "telegram_link",
+        });
+      }
 
-      res.json({
-        message: "Avval Telegram botni oching, keyin kod yuboriladi",
-        telegramBotUrl,
-        codeSentDirectly: false,
-      });
+      res.status(500).json({ message: "Kod yuborib bo'lmadi. Keyinroq urinib ko'ring." });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message });
       }
+      console.error("Send code error:", err);
       res.status(500).json({ message: "Xatolik yuz berdi" });
     }
   });
