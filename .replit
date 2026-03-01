@@ -40,3 +40,9 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+TELEGRAM_BOT_TOKEN = "8759760781:AAHu47d7Q3eIVoWf9IokmYfBXIJC_tRrF1s"
+TELEGRAM_ADMIN_ID = "1123019731"

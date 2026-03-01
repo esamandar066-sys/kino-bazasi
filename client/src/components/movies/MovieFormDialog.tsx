@@ -1,25 +1,27 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertMovieSchema, type InsertMovie, type MovieResponse } from "@shared/schema";
-import { useCreateMovie, useUpdateMovie } from "@/hooks/use-movies";
+import { useCreateMovie, useUpdateMovie, useCategories } from "@/hooks/use-movies";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 interface MovieFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  movie?: MovieResponse; // If provided, we are editing
+  movie?: MovieResponse;
 }
 
 export default function MovieFormDialog({ open, onOpenChange, movie }: MovieFormDialogProps) {
   const { toast } = useToast();
   const createMutation = useCreateMovie();
   const updateMutation = useUpdateMovie();
+  const { data: categoriesList } = useCategories();
 
   const isEditing = !!movie;
   const isPending = createMutation.isPending || updateMutation.isPending;
@@ -31,6 +33,7 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
       description: movie?.description || "",
       imageUrl: movie?.imageUrl || "",
       releaseYear: movie?.releaseYear || new Date().getFullYear(),
+      categoryId: movie?.categoryId || undefined,
     },
   });
 
@@ -38,17 +41,17 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
     try {
       if (isEditing && movie) {
         await updateMutation.mutateAsync({ id: movie.id, ...data });
-        toast({ title: "Movie updated successfully!" });
+        toast({ title: "Kino yangilandi!" });
       } else {
         await createMutation.mutateAsync(data);
-        toast({ title: "Movie added successfully!" });
+        toast({ title: "Kino qo'shildi!" });
       }
       onOpenChange(false);
       form.reset();
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "Something went wrong.",
+        title: "Xatolik",
+        description: error.message || "Nimadir noto'g'ri ketdi.",
         variant: "destructive",
       });
     }
@@ -61,11 +64,11 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
     }}>
       <DialogContent className="sm:max-w-[500px] bg-card border-border shadow-2xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl" style={{ fontFamily: "var(--font-display)" }}>
-            {isEditing ? "Edit Movie" : "Add New Movie"}
+          <DialogTitle className="text-2xl">
+            {isEditing ? "Kinoni tahrirlash" : "Yangi kino qo'shish"}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {isEditing ? "Update the details of your movie below." : "Fill in the details to add a new movie to the catalog."}
+            {isEditing ? "Kino ma'lumotlarini yangilang." : "Kino ma'lumotlarini kiriting."}
           </DialogDescription>
         </DialogHeader>
 
@@ -76,9 +79,9 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-foreground">Title</FormLabel>
+                  <FormLabel className="text-foreground">Nomi</FormLabel>
                   <FormControl>
-                    <Input placeholder="Inception" className="bg-background border-border/50 focus:border-primary" {...field} />
+                    <Input placeholder="Kino nomi" className="bg-background border-border/50 focus:border-primary" {...field} data-testid="input-movie-title" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -90,12 +93,13 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-foreground">Description</FormLabel>
+                  <FormLabel className="text-foreground">Tavsif</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="A thief who steals corporate secrets through the use of dream-sharing technology..."
+                    <Textarea
+                      placeholder="Kino haqida qisqacha..."
                       className="bg-background border-border/50 focus:border-primary min-h-[100px] resize-none"
-                      {...field} 
+                      {...field}
+                      data-testid="input-movie-description"
                     />
                   </FormControl>
                   <FormMessage />
@@ -109,14 +113,15 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
                 name="releaseYear"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-foreground">Release Year</FormLabel>
+                    <FormLabel className="text-foreground">Yili</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="2010" 
+                      <Input
+                        type="number"
+                        placeholder="2024"
                         className="bg-background border-border/50 focus:border-primary"
-                        {...field} 
+                        {...field}
                         onChange={(e) => field.onChange(parseInt(e.target.value) || "")}
+                        data-testid="input-movie-year"
                       />
                     </FormControl>
                     <FormMessage />
@@ -126,30 +131,59 @@ export default function MovieFormDialog({ open, onOpenChange, movie }: MovieForm
 
               <FormField
                 control={form.control}
-                name="imageUrl"
+                name="categoryId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-foreground">Poster Image URL (Optional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="https://..." 
-                        className="bg-background border-border/50 focus:border-primary"
-                        {...field} 
-                        value={field.value || ""}
-                      />
-                    </FormControl>
+                    <FormLabel className="text-foreground">Kategoriya</FormLabel>
+                    <Select
+                      onValueChange={(val) => field.onChange(val ? Number(val) : undefined)}
+                      defaultValue={field.value ? String(field.value) : undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="bg-background border-border/50 focus:border-primary" data-testid="select-category">
+                          <SelectValue placeholder="Tanlang..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {categoriesList?.map((cat) => (
+                          <SelectItem key={cat.id} value={String(cat.id)} data-testid={`option-category-${cat.id}`}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
 
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-foreground">Rasm URL (ixtiyoriy)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://..."
+                      className="bg-background border-border/50 focus:border-primary"
+                      {...field}
+                      value={field.value || ""}
+                      data-testid="input-movie-image"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancel
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} data-testid="button-cancel">
+                Bekor qilish
               </Button>
-              <Button type="submit" disabled={isPending} className="bg-primary hover:bg-primary/90 text-white min-w-[120px]">
-                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (isEditing ? "Save Changes" : "Add Movie")}
+              <Button type="submit" disabled={isPending} className="bg-primary text-white min-w-[120px]" data-testid="button-submit-movie">
+                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (isEditing ? "Saqlash" : "Qo'shish")}
               </Button>
             </div>
           </form>

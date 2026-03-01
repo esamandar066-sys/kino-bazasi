@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import type { InsertMovie, MovieResponse, UpdateMovieRequest } from "@shared/schema";
+import type { InsertMovie, MovieResponse, UpdateMovieRequest, Category } from "@shared/schema";
 
 export function useMovies() {
   return useQuery({
@@ -16,6 +16,21 @@ export function useMovies() {
   });
 }
 
+export function useSearchMovies(query: string, categoryId?: number) {
+  return useQuery({
+    queryKey: [api.movies.search.path, query, categoryId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (categoryId) params.set("categoryId", String(categoryId));
+      const res = await fetch(`${api.movies.search.path}?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to search movies");
+      return (await res.json()) as MovieResponse[];
+    },
+    enabled: !!(query || categoryId),
+  });
+}
+
 export function useMovie(id: number) {
   return useQuery({
     queryKey: [api.movies.get.path, id],
@@ -27,6 +42,17 @@ export function useMovie(id: number) {
       return (await res.json()) as MovieResponse;
     },
     enabled: !!id,
+  });
+}
+
+export function useCategories() {
+  return useQuery({
+    queryKey: [api.categories.list.path],
+    queryFn: async () => {
+      const res = await fetch(api.categories.list.path, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return (await res.json()) as Category[];
+    },
   });
 }
 
@@ -92,6 +118,30 @@ export function useDeleteMovie() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.movies.list.path] });
+    },
+  });
+}
+
+export function useRateMovie() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, score }: { id: number; score: number }) => {
+      const url = buildUrl(api.movies.rate.path, { id });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ score }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Failed to rate movie" }));
+        throw new Error(error.message || "Failed to rate movie");
+      }
+      return (await res.json()) as MovieResponse;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.movies.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.movies.get.path, data.id] });
     },
   });
 }
