@@ -1,5 +1,9 @@
 import type { Express } from "express";
 import { type Server } from "http";
+import express from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { storage } from "./storage";
 import { registerAuthRoutes } from "./replit_integrations/auth";
 import { setupAuth } from "./replit_integrations/auth/replitAuth";
@@ -10,6 +14,32 @@ import { sendSmsCode } from "./twilio-sms";
 import { db } from "./db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const videoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+
+const upload = multer({
+  storage: videoStorage,
+  limits: { fileSize: 500 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ["video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo", "video/x-matroska"];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Faqat video fayllar qabul qilinadi (mp4, webm, ogg, mov, avi, mkv)"));
+    }
+  },
+});
 
 function generateCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -39,6 +69,8 @@ export async function registerRoutes(
 ): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
+
+  app.use("/uploads", express.static(uploadsDir));
 
   startTelegramBot();
 
@@ -193,6 +225,25 @@ export async function registerRoutes(
       return res.status(404).json({ message: "Movie not found" });
     }
     res.json(movie);
+  });
+
+  app.post("/api/upload/video", isAnyAuthenticated, (req: any, res) => {
+    upload.single("video")(req, res, (err: any) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({ message: "Fayl hajmi 500MB dan oshmasligi kerak" });
+        }
+        return res.status(400).json({ message: err.message });
+      }
+      if (err) {
+        return res.status(400).json({ message: err.message });
+      }
+      if (!req.file) {
+        return res.status(400).json({ message: "Video fayl yuklanmadi" });
+      }
+      const videoUrl = `/uploads/${req.file.filename}`;
+      res.json({ videoUrl });
+    });
   });
 
   app.post(api.movies.create.path, isAnyAuthenticated, async (req: any, res) => {

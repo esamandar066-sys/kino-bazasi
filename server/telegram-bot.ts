@@ -162,15 +162,17 @@ export function startTelegramBot(): void {
     const year = movie.releaseYear || "?";
     const appUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0] || "kinolar.replit.app"}/movie/${movie.id}`;
 
-    const text = [
+    const hasVideo = movie.videoUrl ? "\u{1F3AC} Video: Bor" : "";
+    const lines = [
       `\u{1F3AC} *${movie.title}*`,
       ``,
       `\u{1F4C5} Yil: ${year}`,
       `\u{1F4C1} Kategoriya: ${catName}`,
       `\u{2B50} Reyting: ${rating} (${movie.ratingCount || 0} baho)`,
-      ``,
-      `${movie.description?.substring(0, 200)}${movie.description?.length > 200 ? "..." : ""}`
-    ].join("\n");
+    ];
+    if (hasVideo) lines.push(hasVideo);
+    lines.push(``, `${movie.description?.substring(0, 200)}${movie.description?.length > 200 ? "..." : ""}`);
+    const text = lines.join("\n");
 
     const keyboard: TelegramBot.InlineKeyboardButton[][] = [
       [{ text: "\u{1F440} Batafsil ko'rish", url: appUrl }]
@@ -612,7 +614,8 @@ export function startTelegramBot(): void {
         `\u{1F4C4} Ta'rif: ${state.data.description?.substring(0, 100)}...`,
         `\u{1F4C5} Yil: ${state.data.releaseYear || "?"}`,
         `\u{1F4C1} Kategoriya: ${catName}`,
-        `\u{1F5BC} Rasm: ${state.data.imageUrl ? "Bor" : "Yo'q"}`
+        `\u{1F5BC} Rasm: ${state.data.imageUrl ? "Bor" : "Yo'q"}`,
+        `\u{1F3AC} Video: ${state.data.videoUrl ? "Bor" : "Yo'q"}`
       ].join("\n"), {
         parse_mode: "Markdown",
         reply_markup: {
@@ -637,6 +640,7 @@ export function startTelegramBot(): void {
           description: state.data.description,
           releaseYear: state.data.releaseYear,
           imageUrl: state.data.imageUrl,
+          videoUrl: state.data.videoUrl,
           categoryId: state.data.categoryId,
           userId: String(ADMIN_ID),
         });
@@ -668,10 +672,108 @@ export function startTelegramBot(): void {
     }
   });
 
+  bot.on("video", async (msg) => {
+    const chatId = msg.chat.id;
+    const state = adminState.get(chatId);
+    if (!state || state.step !== "video") return;
+
+    try {
+      const video = msg.video!;
+      const maxSize = 50 * 1024 * 1024;
+      if (video.file_size && video.file_size > maxSize) {
+        await bot!.sendMessage(chatId, `\u{274C} Video hajmi juda katta (max 50MB). URL kiriting yoki kichikroq fayl yuboring.`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{23ED} O'tkazish", callback_data: "skip_video" }],
+            ]
+          }
+        });
+        return;
+      }
+      const fileId = video.file_id;
+      const fileLink = await bot!.getFileLink(fileId);
+
+      const fs = await import("fs");
+      const path = await import("path");
+      const uploadsDir = path.join(process.cwd(), "uploads");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`;
+      const filePath = path.join(uploadsDir, fileName);
+
+      const response = await fetch(fileLink);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      fs.writeFileSync(filePath, buffer);
+
+      const videoUrl = `/uploads/${fileName}`;
+      state.data.videoUrl = videoUrl;
+      state.step = "category";
+
+      await bot!.sendMessage(chatId, `\u{2705} Video yuklandi!`);
+      await showCategorySelection(chatId);
+    } catch (err) {
+      console.error("Video download error:", err);
+      await bot!.sendMessage(chatId, `\u{274C} Video yuklab olib bo'lmadi. URL kiriting yoki qaytadan yuboring.`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{23ED} O'tkazish", callback_data: "skip_video" }],
+            [{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }]
+          ]
+        }
+      });
+    }
+  });
+
+  bot.on("document", async (msg) => {
+    const chatId = msg.chat.id;
+    const state = adminState.get(chatId);
+    if (!state || state.step !== "video") return;
+
+    const doc = msg.document!;
+    const mime = doc.mime_type || "";
+    if (!mime.startsWith("video/")) {
+      await bot!.sendMessage(chatId, "\u{274C} Faqat video fayllar qabul qilinadi.");
+      return;
+    }
+
+    const maxSize = 50 * 1024 * 1024;
+    if (doc.file_size && doc.file_size > maxSize) {
+      await bot!.sendMessage(chatId, `\u{274C} Video hajmi juda katta (max 50MB). URL kiriting yoki kichikroq fayl yuboring.`);
+      return;
+    }
+
+    try {
+      const fileLink = await bot!.getFileLink(doc.file_id);
+      const fs = await import("fs");
+      const path = await import("path");
+      const uploadsDir = path.join(process.cwd(), "uploads");
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+      const ext = path.extname(doc.file_name || ".mp4") || ".mp4";
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+      const filePath = path.join(uploadsDir, fileName);
+
+      const response = await fetch(fileLink);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      fs.writeFileSync(filePath, buffer);
+
+      const videoUrl = `/uploads/${fileName}`;
+      state.data.videoUrl = videoUrl;
+      state.step = "category";
+
+      await bot!.sendMessage(chatId, `\u{2705} Video yuklandi!`);
+      await showCategorySelection(chatId);
+    } catch (err) {
+      console.error("Document video download error:", err);
+      await bot!.sendMessage(chatId, `\u{274C} Video yuklab olib bo'lmadi. URL kiriting yoki qaytadan yuboring.`);
+    }
+  });
+
   // Handle text messages for step-by-step flows and movie lookup by ID
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
     if (msg.text?.startsWith("/")) return;
+    if (msg.video || msg.document) return;
 
     const text = msg.text || "";
     const state = adminState.get(chatId);
@@ -817,6 +919,18 @@ export function startTelegramBot(): void {
         break;
       case "image":
         state.data.imageUrl = text;
+        state.step = "video";
+        await bot!.sendMessage(chatId, `\u{1F3AC} Video URL manzilini kiriting yoki video fayl yuboring:`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{23ED} O'tkazish", callback_data: "skip_video" }],
+              [{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }]
+            ]
+          }
+        });
+        break;
+      case "video":
+        state.data.videoUrl = text;
         state.step = "category";
         await showCategorySelection(chatId);
         break;
@@ -834,7 +948,8 @@ export function startTelegramBot(): void {
           `\u{1F4C4} Ta'rif: ${state.data.description?.substring(0, 100)}...`,
           `\u{1F4C5} Yil: ${state.data.releaseYear || "?"}`,
           `\u{1F4C1} Kategoriya: ${catName}`,
-          `\u{1F5BC} Rasm: ${state.data.imageUrl ? "Bor" : "Yo'q"}`
+          `\u{1F5BC} Rasm: ${state.data.imageUrl ? "Bor" : "Yo'q"}`,
+          `\u{1F3AC} Video: ${state.data.videoUrl ? "Bor" : "Yo'q"}`
         ].join("\n"), {
           parse_mode: "Markdown",
           reply_markup: {
@@ -878,6 +993,23 @@ export function startTelegramBot(): void {
       if (!state) return;
       await bot!.answerCallbackQuery(query.id);
       state.data.imageUrl = null;
+      state.step = "video";
+      await bot!.sendMessage(chatId, `\u{1F3AC} Video URL manzilini kiriting yoki video fayl yuboring:`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{23ED} O'tkazish", callback_data: "skip_video" }],
+            [{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data === "skip_video") {
+      const state = adminState.get(chatId);
+      if (!state) return;
+      await bot!.answerCallbackQuery(query.id);
+      state.data.videoUrl = null;
       state.step = "category";
       await showCategorySelection(chatId);
       return;

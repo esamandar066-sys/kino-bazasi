@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Edit, Trash2, Calendar, User as UserIcon, Clock, Star } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Calendar, User as UserIcon, Clock, Star, Play } from "lucide-react";
 import { useState } from "react";
 import MovieFormDialog from "@/components/movies/MovieFormDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,7 @@ export default function MovieDetail() {
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [hoverRating, setHoverRating] = useState(0);
+  const [showVideo, setShowVideo] = useState(false);
 
   const isOwner = user?.id === movie?.userId;
 
@@ -78,6 +79,21 @@ export default function MovieDetail() {
     }
   };
 
+  const isLocalVideo = movie.videoUrl && movie.videoUrl.startsWith("/uploads/");
+  const isDirectVideo = movie.videoUrl && (
+    isLocalVideo ||
+    movie.videoUrl.endsWith(".mp4") ||
+    movie.videoUrl.endsWith(".webm") ||
+    movie.videoUrl.endsWith(".ogg")
+  );
+  const isTrustedEmbed = movie.videoUrl && (
+    movie.videoUrl.includes("youtube.com") ||
+    movie.videoUrl.includes("youtu.be") ||
+    movie.videoUrl.includes("vimeo.com") ||
+    movie.videoUrl.includes("dailymotion.com")
+  );
+  const hasVideo = !!movie.videoUrl;
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <Navbar />
@@ -98,20 +114,93 @@ export default function MovieDetail() {
             Orqaga
           </Button>
         </div>
+
+        {hasVideo && !showVideo && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <button
+              onClick={() => setShowVideo(true)}
+              className="w-20 h-20 sm:w-24 sm:h-24 bg-primary/90 rounded-full flex items-center justify-center transition-transform hover:scale-110 shadow-2xl"
+              data-testid="button-play-video"
+            >
+              <Play className="w-10 h-10 sm:w-12 sm:h-12 text-white fill-white ml-1" />
+            </button>
+          </div>
+        )}
       </div>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 -mt-32 sm:-mt-48 flex flex-col md:flex-row gap-8 lg:gap-12">
+      {showVideo && hasVideo && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 -mt-32 sm:-mt-48 relative z-20 mb-8"
+        >
+          <div className="bg-black rounded-xl overflow-hidden shadow-2xl ring-1 ring-border/50">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute top-2 right-2 z-30 text-white bg-black/50 hover:bg-black/70"
+                onClick={() => setShowVideo(false)}
+                data-testid="button-close-video"
+              >
+                Yopish
+              </Button>
+              {isDirectVideo ? (
+                <video
+                  controls
+                  autoPlay
+                  className="w-full max-h-[70vh]"
+                  data-testid="video-player"
+                >
+                  <source src={movie.videoUrl!} />
+                  Brauzeringiz video formatini qo'llab-quvvatlamaydi.
+                </video>
+              ) : isTrustedEmbed ? (
+                <iframe
+                  src={movie.videoUrl!}
+                  className="w-full aspect-video"
+                  allowFullScreen
+                  allow="autoplay; encrypted-media"
+                  data-testid="video-iframe"
+                />
+              ) : (
+                <div className="p-8 text-center">
+                  <a
+                    href={movie.videoUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline text-lg"
+                    data-testid="link-external-video"
+                  >
+                    Videoni tashqi saytda ko'rish
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      <main className={`max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 ${showVideo ? '' : '-mt-32 sm:-mt-48'} flex flex-col md:flex-row gap-8 lg:gap-12`}>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-48 sm:w-64 md:w-80 flex-shrink-0 mx-auto md:mx-0 rounded-xl overflow-hidden shadow-2xl shadow-black ring-1 ring-border/50"
+          className="w-48 sm:w-64 md:w-80 flex-shrink-0 mx-auto md:mx-0 rounded-xl overflow-hidden shadow-2xl shadow-black ring-1 ring-border/50 relative group"
         >
           <img
             src={movie.imageUrl || fallbackImage}
             alt={movie.title}
             className="w-full h-auto object-cover aspect-[2/3]"
           />
+          {hasVideo && (
+            <div
+              className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              onClick={() => setShowVideo(true)}
+            >
+              <Play className="w-12 h-12 text-white fill-white" />
+            </div>
+          )}
         </motion.div>
 
         <motion.div
@@ -149,9 +238,26 @@ export default function MovieDetail() {
               <Clock className="w-5 h-5 text-primary" />
               <span className="text-white" data-testid="text-date">Qo'shilgan: {new Date(movie.createdAt!).toLocaleDateString()}</span>
             </div>
+
+            {hasVideo && (
+              <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30" data-testid="badge-has-video">
+                <Play className="w-3 h-3 mr-1" />
+                Video mavjud
+              </Badge>
+            )}
           </div>
 
-          {/* Rating display and interaction */}
+          {hasVideo && !showVideo && (
+            <Button
+              onClick={() => setShowVideo(true)}
+              className="mb-6 bg-primary text-white font-semibold"
+              data-testid="button-watch-video"
+            >
+              <Play className="w-5 h-5 mr-2 fill-white" />
+              Kinoni ko'rish
+            </Button>
+          )}
+
           <div className="flex items-center gap-4 mb-8 p-4 bg-card/50 rounded-lg border border-border/50">
             <div className="flex items-center gap-1">
               <Star className="w-6 h-6 fill-yellow-400 text-yellow-400" />

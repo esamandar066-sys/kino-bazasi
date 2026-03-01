@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Badge } from "@/components/ui/badge";
-import { PlayCircle, Star } from "lucide-react";
+import { PlayCircle, Star, Video } from "lucide-react";
 import type { MovieResponse } from "@shared/schema";
 import { motion } from "framer-motion";
 
@@ -40,6 +40,15 @@ export default function MovieCard({ movie, index = 0 }: MovieCardProps) {
             <div className="absolute top-2 left-2">
               <Badge variant="secondary" className="bg-black/60 text-white border-0 text-xs backdrop-blur-sm" data-testid={`badge-category-${movie.id}`}>
                 {movie.category.name}
+              </Badge>
+            </div>
+          )}
+
+          {movie.videoUrl && (
+            <div className="absolute bottom-14 right-2">
+              <Badge variant="secondary" className="bg-green-500/80 text-white border-0 text-xs backdrop-blur-sm" data-testid={`badge-video-${movie.id}`}>
+                <Video className="w-3 h-3 mr-1" />
+                Video
               </Badge>
             </div>
           )}

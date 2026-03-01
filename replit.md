@@ -14,7 +14,9 @@ A movie catalog application where users can register, login, browse movies, add 
 ## Key Features
 - Google login via Replit Auth
 - Phone number login with SMS verification codes (Twilio), Telegram as fallback
-- Movie CRUD operations
+- Movie CRUD operations with video upload support
+- Video upload via web form (file upload or URL) and Telegram bot
+- Video player on movie detail page (HTML5 video + YouTube/Vimeo embed)
 - Movie categories and search
 - Star rating system (1-5)
 - Telegram bot admin panel with inline keyboard buttons
@@ -66,7 +68,8 @@ client/public/
 
 ## Telegram Bot
 ### Admin Features (inline buttons)
-- Add movie (step-by-step with category selection)
+- Add movie (step-by-step: title, description, year, image, video, category)
+- Video upload: send video file or paste URL
 - List/view movies
 - Delete movies (with confirmation)
 - Manage categories

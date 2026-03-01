@@ -15,6 +15,7 @@ export const movies = pgTable("movies", {
   title: text("title").notNull(),
   description: text("description").notNull(),
   imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
   releaseYear: integer("release_year"),
   categoryId: integer("category_id"),
   userId: varchar("user_id").notNull(),
@@ -31,7 +32,12 @@ export const ratings = pgTable("ratings", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertMovieSchema = createInsertSchema(movies).omit({ id: true, createdAt: true, userId: true, rating: true, ratingCount: true });
+export const insertMovieSchema = createInsertSchema(movies).omit({ id: true, createdAt: true, userId: true, rating: true, ratingCount: true }).extend({
+  videoUrl: z.string().nullable().optional().refine(
+    (val) => !val || val.startsWith("/uploads/") || val.startsWith("https://") || val.startsWith("http://"),
+    { message: "Video URL noto'g'ri formatda" }
+  ),
+});
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 
 export type Movie = typeof movies.$inferSelect;
