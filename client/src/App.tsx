@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import MovieDetail from "@/pages/MovieDetail";
 import Login from "@/pages/Login";
+import InstallPrompt from "@/components/layout/InstallPrompt";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router />
+        <InstallPrompt />
       </TooltipProvider>
     </QueryClientProvider>
   );
