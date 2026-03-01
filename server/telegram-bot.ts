@@ -73,6 +73,8 @@ export function startTelegramBot(): void {
       const phoneNumber = param.replace("verify_", "");
       userChatIds.set(phoneNumber, chatId);
 
+      await storage.upsertUserByPhone(phoneNumber, String(chatId));
+
       const pendingCode = await storage.getLatestVerificationCode(phoneNumber);
       if (pendingCode) {
         await storage.updateVerificationCodeChatId(pendingCode.id, String(chatId));
@@ -625,15 +627,62 @@ export function startTelegramBot(): void {
     }
   });
 
-  // Handle text messages for step-by-step flows
+  // Handle text messages for step-by-step flows and movie lookup by ID
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
     if (msg.text?.startsWith("/")) return;
 
-    const state = adminState.get(chatId);
-    if (!state) return;
-
     const text = msg.text || "";
+    const state = adminState.get(chatId);
+
+    if (!state) {
+      const trimmed = text.trim();
+      if (/^\d+$/.test(trimmed)) {
+        const movieId = Number(trimmed);
+        const movie = await storage.getMovie(movieId);
+        if (movie) {
+          await sendMovieCard(chatId, movie, isAdmin(chatId));
+        } else {
+          await bot!.sendMessage(chatId, `\u{274C} ${movieId}-ID bilan kino topilmadi.\n\nKino qidirish uchun nomini yozing yoki menyu tugmalarini ishlating.`, {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "\u{1F525} Barcha kinolar", callback_data: "user_all_movies" }],
+                [{ text: "\u{1F50D} Kino qidirish", callback_data: "user_search" }],
+                [{ text: "\u{1F3E0} Bosh menyu", callback_data: isAdmin(chatId) ? "admin_menu" : "user_menu" }]
+              ]
+            }
+          });
+        }
+        return;
+      }
+
+      const movies = await storage.searchMovies(trimmed);
+      if (movies.length > 0) {
+        const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+        for (const movie of movies.slice(0, 10)) {
+          const rating = movie.rating ? `\u{2B50}${movie.rating.toFixed(1)}` : "";
+          keyboard.push([
+            { text: `${movie.title} (${movie.releaseYear || "?"}) ${rating}`, callback_data: `view_movie_${movie.id}` }
+          ]);
+        }
+        keyboard.push([{ text: "\u{1F3E0} Bosh menyu", callback_data: isAdmin(chatId) ? "admin_menu" : "user_menu" }]);
+
+        await bot!.sendMessage(chatId, `\u{1F50D} *"${trimmed}"* bo'yicha natijalar:`, {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: keyboard }
+        });
+      } else {
+        await bot!.sendMessage(chatId, `\u{1F50D} "${trimmed}" bo'yicha hech narsa topilmadi.`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F525} Barcha kinolar", callback_data: "user_all_movies" }],
+              [{ text: "\u{1F3E0} Bosh menyu", callback_data: isAdmin(chatId) ? "admin_menu" : "user_menu" }]
+            ]
+          }
+        });
+      }
+      return;
+    }
 
     // User search flow
     if (state.step === "user_search_query") {

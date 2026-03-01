@@ -51,9 +51,15 @@ export default function Login() {
         toast({ title: data.message || "Xatolik", variant: "destructive" });
         return;
       }
-      setTelegramUrl(data.telegramBotUrl);
-      setStep("code");
-      toast({ title: "Telegram botga o'ting va tasdiqlash kodini oling" });
+      if (data.codeSentDirectly) {
+        setTelegramUrl("");
+        setStep("code");
+        toast({ title: "Tasdiqlash kodi Telegram botga yuborildi!" });
+      } else {
+        setTelegramUrl(data.telegramBotUrl || "");
+        setStep("code");
+        toast({ title: "Telegram botga o'ting va tasdiqlash kodini oling" });
+      }
     } catch {
       toast({ title: "Xatolik yuz berdi", variant: "destructive" });
     } finally {
@@ -147,17 +153,30 @@ export default function Login() {
                 ) : (
                   <>
                     <div className="text-center mb-4">
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Telegram botga o'ting va tasdiqlash kodini oling:
-                      </p>
-                      <Button
-                        variant="outline"
-                        onClick={() => window.open(telegramUrl, "_blank")}
-                        className="mb-4"
-                        data-testid="button-open-telegram"
-                      >
-                        Telegram botni ochish
-                      </Button>
+                      {telegramUrl ? (
+                        <>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Telegram botga o'ting va tasdiqlash kodini oling:
+                          </p>
+                          <Button
+                            variant="outline"
+                            onClick={() => window.open(telegramUrl, "_blank")}
+                            className="mb-4"
+                            data-testid="button-open-telegram"
+                          >
+                            Telegram botni ochish
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 mb-3">
+                          <p className="text-sm text-green-400 font-medium" data-testid="text-code-sent">
+                            Tasdiqlash kodi Telegram botga yuborildi!
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Telegram ilovasini oching va kodni kiriting
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">Tasdiqlash kodi</label>

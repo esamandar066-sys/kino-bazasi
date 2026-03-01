@@ -5,7 +5,7 @@ import { registerAuthRoutes } from "./replit_integrations/auth";
 import { setupAuth } from "./replit_integrations/auth/replitAuth";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startTelegramBot, getBotUsername } from "./telegram-bot";
+import { startTelegramBot, getBotUsername, sendVerificationCode } from "./telegram-bot";
 import { db } from "./db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
@@ -64,11 +64,22 @@ export async function registerRoutes(
     try {
       const { phoneNumber } = api.phoneAuth.sendCode.input.parse(req.body);
       const code = generateCode();
-      await storage.createVerificationCode(phoneNumber, code);
+      const vc = await storage.createVerificationCode(phoneNumber, code);
 
       const username = getBotUsername();
       if (!username) {
         return res.status(500).json({ message: "Telegram bot hali ishga tushmagan. Biroz kuting." });
+      }
+
+      const existingUser = await storage.getUserByPhone(phoneNumber);
+      if (existingUser?.telegramChatId) {
+        const sent = await sendVerificationCode(existingUser.telegramChatId, code, phoneNumber);
+        if (sent) {
+          return res.json({
+            message: "Tasdiqlash kodi Telegram botga yuborildi",
+            codeSentDirectly: true,
+          });
+        }
       }
 
       const telegramBotUrl = `https://t.me/${username}?start=verify_${phoneNumber}`;
@@ -76,6 +87,7 @@ export async function registerRoutes(
       res.json({
         message: "Telegram botga o'ting va tasdiqlash kodini oling",
         telegramBotUrl,
+        codeSentDirectly: false,
       });
     } catch (err) {
       if (err instanceof z.ZodError) {
