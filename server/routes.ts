@@ -62,12 +62,13 @@ export async function registerRoutes(
 
   app.post(api.phoneAuth.sendCode.path, async (req, res) => {
     try {
-      const { phoneNumber } = api.phoneAuth.sendCode.input.parse(req.body);
+      const { phoneNumber, telegramUsername } = api.phoneAuth.sendCode.input.parse(req.body);
       const code = generateCode();
-      const vc = await storage.createVerificationCode(phoneNumber, code);
+      await storage.createVerificationCode(phoneNumber, code);
+      await storage.upsertUserByPhone(phoneNumber, undefined, telegramUsername);
 
-      const username = getBotUsername();
-      if (!username) {
+      const botName = getBotUsername();
+      if (!botName) {
         return res.status(500).json({ message: "Telegram bot hali ishga tushmagan. Biroz kuting." });
       }
 
@@ -82,10 +83,22 @@ export async function registerRoutes(
         }
       }
 
-      const telegramBotUrl = `https://t.me/${username}?start=verify_${phoneNumber}`;
+      const userByTg = await storage.getUserByTelegramUsername(telegramUsername);
+      if (userByTg?.telegramChatId) {
+        await storage.upsertUserByPhone(phoneNumber, userByTg.telegramChatId, telegramUsername);
+        const sent = await sendVerificationCode(userByTg.telegramChatId, code, phoneNumber);
+        if (sent) {
+          return res.json({
+            message: "Tasdiqlash kodi Telegram botga yuborildi",
+            codeSentDirectly: true,
+          });
+        }
+      }
+
+      const telegramBotUrl = `https://t.me/${botName}?start=verify_${phoneNumber}`;
 
       res.json({
-        message: "Telegram botga o'ting va tasdiqlash kodini oling",
+        message: "Avval Telegram botni oching, keyin kod yuboriladi",
         telegramBotUrl,
         codeSentDirectly: false,
       });

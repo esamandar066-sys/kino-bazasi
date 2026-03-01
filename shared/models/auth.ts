@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   phoneNumber: varchar("phone_number").unique(),
   telegramChatId: varchar("telegram_chat_id"),
+  telegramUsername: varchar("telegram_username"),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),

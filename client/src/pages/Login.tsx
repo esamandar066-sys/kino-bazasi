@@ -18,6 +18,7 @@ export default function Login() {
   const queryClient = useQueryClient();
 
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [telegramUsername, setTelegramUsername] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [telegramUrl, setTelegramUrl] = useState("");
@@ -71,12 +72,16 @@ export default function Login() {
       toast({ title: "Telefon raqamni to'liq kiriting", variant: "destructive" });
       return;
     }
+    if (!telegramUsername || telegramUsername.length < 2) {
+      toast({ title: "Telegram username kiriting", variant: "destructive" });
+      return;
+    }
     setIsSending(true);
     try {
       const res = await fetch("/api/auth/phone/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phoneNumber }),
+        body: JSON.stringify({ phoneNumber, telegramUsername: telegramUsername.replace(/^@/, "") }),
         credentials: "include",
       });
       const data = await res.json();
@@ -170,6 +175,20 @@ export default function Login() {
                         data-testid="input-phone"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Telegram username</label>
+                      <div className="relative">
+                        <SiTelegram className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-blue-400" />
+                        <Input
+                          type="text"
+                          placeholder="@username"
+                          value={telegramUsername}
+                          onChange={(e) => setTelegramUsername(e.target.value)}
+                          className="bg-background pl-10"
+                          data-testid="input-telegram-username"
+                        />
+                      </div>
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Tasdiqlash kodi Telegram bot orqali yuboriladi
                     </p>
@@ -179,7 +198,7 @@ export default function Login() {
                       className="w-full"
                       data-testid="button-send-code"
                     >
-                      {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Phone className="w-4 h-4 mr-2" />}
+                      {isSending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <SiTelegram className="w-4 h-4 mr-2" />}
                       Kod yuborish
                     </Button>
                   </>

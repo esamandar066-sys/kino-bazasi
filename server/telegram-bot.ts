@@ -75,7 +75,8 @@ export function startTelegramBot(): void {
       const phoneNumber = param.replace("verify_", "");
       userChatIds.set(phoneNumber, chatId);
 
-      await storage.upsertUserByPhone(phoneNumber, String(chatId));
+      const tgUsername = msg.from?.username || "";
+      await storage.upsertUserByPhone(phoneNumber, String(chatId), tgUsername);
 
       const pendingCode = await storage.getLatestVerificationCode(phoneNumber);
       if (pendingCode) {

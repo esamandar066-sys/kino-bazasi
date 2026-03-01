@@ -21,7 +21,8 @@ export interface IStorage {
   checkTelegramVerification(phoneNumber: string): Promise<{ verified: boolean; loginToken?: string }>;
   consumeLoginToken(token: string): Promise<string | null>;
   getUserByPhone(phoneNumber: string): Promise<User | undefined>;
-  upsertUserByPhone(phoneNumber: string, telegramChatId?: string): Promise<User>;
+  getUserByTelegramUsername(username: string): Promise<User | undefined>;
+  upsertUserByPhone(phoneNumber: string, telegramChatId?: string, telegramUsername?: string): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -285,12 +286,20 @@ export class DatabaseStorage implements IStorage {
     return results[0];
   }
 
-  async upsertUserByPhone(phoneNumber: string, telegramChatId?: string): Promise<User> {
+  async getUserByTelegramUsername(username: string): Promise<User | undefined> {
+    const clean = username.replace(/^@/, "").toLowerCase();
+    const results = await db.select().from(users).where(eq(users.telegramUsername, clean));
+    return results[0];
+  }
+
+  async upsertUserByPhone(phoneNumber: string, telegramChatId?: string, telegramUsername?: string): Promise<User> {
+    const cleanUsername = telegramUsername?.replace(/^@/, "").toLowerCase();
     const existing = await this.getUserByPhone(phoneNumber);
     if (existing) {
-      if (telegramChatId) {
-        await db.update(users).set({ telegramChatId, updatedAt: new Date() }).where(eq(users.id, existing.id));
-      }
+      const updates: any = { updatedAt: new Date() };
+      if (telegramChatId) updates.telegramChatId = telegramChatId;
+      if (cleanUsername) updates.telegramUsername = cleanUsername;
+      await db.update(users).set(updates).where(eq(users.id, existing.id));
       const updated = await this.getUserByPhone(phoneNumber);
       return updated!;
     }
@@ -298,6 +307,7 @@ export class DatabaseStorage implements IStorage {
     const [newUser] = await db.insert(users).values({
       phoneNumber,
       telegramChatId,
+      telegramUsername: cleanUsername,
       firstName: phoneNumber,
     }).returning();
     return newUser;
