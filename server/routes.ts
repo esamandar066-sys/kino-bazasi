@@ -120,6 +120,28 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/auth/phone/check-telegram", async (req: any, res) => {
+    try {
+      const phoneNumber = req.query.phoneNumber as string;
+      if (!phoneNumber) {
+        return res.status(400).json({ verified: false });
+      }
+
+      const result = await storage.checkTelegramVerification(phoneNumber);
+      if (result.verified && result.loginToken) {
+        const user = await storage.upsertUserByPhone(phoneNumber);
+        req.session.phoneUserId = user.id;
+        req.session.save(() => {
+          res.json({ verified: true });
+        });
+      } else {
+        res.json({ verified: false });
+      }
+    } catch {
+      res.json({ verified: false });
+    }
+  });
+
   app.get(api.categories.list.path, async (req, res) => {
     const cats = await storage.getCategories();
     res.json(cats);

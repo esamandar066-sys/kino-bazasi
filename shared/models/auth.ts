@@ -30,6 +30,8 @@ export const verificationCodes = pgTable("verification_codes", {
   telegramChatId: varchar("telegram_chat_id"),
   expiresAt: timestamp("expires_at").notNull(),
   used: varchar("used").default("false"),
+  verifiedViaTelegram: varchar("verified_via_telegram").default("false"),
+  loginToken: varchar("login_token"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

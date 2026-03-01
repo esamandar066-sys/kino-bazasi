@@ -26,13 +26,15 @@ export async function sendVerificationCode(chatId: string, code: string, phoneNu
       `Kod: *${code}*`,
       ``,
       `\u{23F3} Kod 5 daqiqa ichida amal qiladi.`,
-      `Kodni ilovaga kiriting.`
+      ``,
+      `\u{2B07} Quyidagi tugmani bosib tasdiqlang yoki kodni ilovaga kiriting.`
     ].join("\n"), {
       parse_mode: "Markdown",
       reply_markup: {
-        inline_keyboard: [[
-          { text: "\u{1F3AC} Ilovaga o'tish", url: `https://${process.env.REPLIT_DOMAINS?.split(",")[0] || "kinolar.replit.app"}` }
-        ]]
+        inline_keyboard: [
+          [{ text: "\u{2705} Tasdiqlash", callback_data: `telegram_verify_${phoneNumber}_${code}` }],
+          [{ text: "\u{1F3AC} Ilovaga o'tish", url: `https://${process.env.REPLIT_DOMAINS?.split(",")[0] || "kinolar.replit.app"}` }]
+        ]
       }
     });
     return true;
@@ -206,6 +208,44 @@ export function startTelegramBot(): void {
 
     const data = query.data || "";
     await bot!.answerCallbackQuery(query.id);
+
+    if (data.startsWith("telegram_verify_")) {
+      const parts = data.replace("telegram_verify_", "").split("_");
+      const code = parts.pop()!;
+      const phoneNumber = parts.join("_");
+
+      const token = await storage.verifyViaTelegram(phoneNumber, code);
+      if (token) {
+        await storage.upsertUserByPhone(phoneNumber, String(chatId));
+
+        const appUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0] || "kinolar.replit.app"}`;
+
+        await bot!.sendMessage(chatId, [
+          `\u{2705} *Muvaffaqiyatli tasdiqlandi!*`,
+          ``,
+          `Telefon: \`${phoneNumber}\``,
+          ``,
+          `Ilova avtomatik kiradi. Agar kirmasa, quyidagi tugmani bosing.`
+        ].join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F3AC} Ilovani ochish", url: appUrl }],
+              [{ text: "\u{1F3E0} Bosh menyu", callback_data: isAdmin(chatId) ? "admin_menu" : "user_menu" }]
+            ]
+          }
+        });
+      } else {
+        await bot!.sendMessage(chatId, "\u{274C} Kod eskirgan yoki allaqachon ishlatilgan. Ilovadan qayta kod so'rang.", {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F504} Ilovaga o'tish", url: `https://${process.env.REPLIT_DOMAINS?.split(",")[0] || "kinolar.replit.app"}/login` }]
+            ]
+          }
+        });
+      }
+      return;
+    }
 
     // Admin actions
     if (data === "admin_menu") {

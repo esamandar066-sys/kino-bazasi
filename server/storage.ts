@@ -17,6 +17,9 @@ export interface IStorage {
   getLatestVerificationCode(phoneNumber: string): Promise<VerificationCode | undefined>;
   updateVerificationCodeChatId(id: number, chatId: string): Promise<void>;
   verifyCode(phoneNumber: string, code: string): Promise<boolean>;
+  verifyViaTelegram(phoneNumber: string, code: string): Promise<string | null>;
+  checkTelegramVerification(phoneNumber: string): Promise<{ verified: boolean; loginToken?: string }>;
+  consumeLoginToken(token: string): Promise<string | null>;
   getUserByPhone(phoneNumber: string): Promise<User | undefined>;
   upsertUserByPhone(phoneNumber: string, telegramChatId?: string): Promise<User>;
 }
@@ -208,6 +211,73 @@ export class DatabaseStorage implements IStorage {
 
     await db.update(verificationCodes).set({ used: "true" }).where(eq(verificationCodes.id, vc.id));
     return true;
+  }
+
+  async verifyViaTelegram(phoneNumber: string, code: string): Promise<string | null> {
+    const results = await db
+      .select()
+      .from(verificationCodes)
+      .where(and(
+        eq(verificationCodes.phoneNumber, phoneNumber),
+        eq(verificationCodes.code, code),
+        eq(verificationCodes.used, "false")
+      ))
+      .orderBy(desc(verificationCodes.createdAt))
+      .limit(1);
+
+    if (results.length === 0) return null;
+
+    const vc = results[0];
+    if (new Date() > vc.expiresAt) return null;
+
+    const token = crypto.randomUUID();
+    await db.update(verificationCodes).set({
+      used: "true",
+      verifiedViaTelegram: "true",
+      loginToken: token,
+    }).where(eq(verificationCodes.id, vc.id));
+
+    return token;
+  }
+
+  async checkTelegramVerification(phoneNumber: string): Promise<{ verified: boolean; loginToken?: string }> {
+    const results = await db
+      .select()
+      .from(verificationCodes)
+      .where(and(
+        eq(verificationCodes.phoneNumber, phoneNumber),
+        eq(verificationCodes.verifiedViaTelegram, "true"),
+      ))
+      .orderBy(desc(verificationCodes.createdAt))
+      .limit(1);
+
+    if (results.length === 0) return { verified: false };
+
+    const vc = results[0];
+    if (new Date() > vc.expiresAt) return { verified: false };
+    if (!vc.loginToken) return { verified: false };
+
+    return { verified: true, loginToken: vc.loginToken };
+  }
+
+  async consumeLoginToken(token: string): Promise<string | null> {
+    const results = await db
+      .select()
+      .from(verificationCodes)
+      .where(and(
+        eq(verificationCodes.loginToken, token),
+        eq(verificationCodes.verifiedViaTelegram, "true"),
+      ))
+      .limit(1);
+
+    if (results.length === 0) return null;
+
+    const vc = results[0];
+    if (new Date() > vc.expiresAt) return null;
+
+    await db.update(verificationCodes).set({ loginToken: null }).where(eq(verificationCodes.id, vc.id));
+
+    return vc.phoneNumber;
   }
 
   async getUserByPhone(phoneNumber: string): Promise<User | undefined> {
