@@ -190,6 +190,9 @@ export function startTelegramBot(): void {
 
     if (showAdminButtons) {
       keyboard.push([
+        { text: "\u{1F4FA} Qismlar", callback_data: `episodes_${movie.id}` },
+      ]);
+      keyboard.push([
         { text: "\u{1F5D1} O'chirish", callback_data: `confirm_delete_${movie.id}` },
       ]);
     }
@@ -747,6 +750,131 @@ export function startTelegramBot(): void {
       return;
     }
 
+    if (data.startsWith("episodes_")) {
+      if (!isAdmin(chatId)) return;
+      const movieId = Number(data.replace("episodes_", ""));
+      const movie = await storage.getMovie(movieId);
+      if (!movie) {
+        await bot!.sendMessage(chatId, "\u{274C} Kino topilmadi.");
+        return;
+      }
+      const eps = await storage.getEpisodes(movieId);
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+
+      if (eps.length === 0) {
+        await bot!.sendMessage(chatId, [
+          `\u{1F4FA} *${movie.title}* - Qismlar`,
+          ``,
+          `Hozircha qismlar yo'q.`
+        ].join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{2795} Qism qo'shish", callback_data: `add_episode_${movieId}` }],
+              [{ text: "\u{25C0} Orqaga", callback_data: `view_movie_${movieId}` }]
+            ]
+          }
+        });
+      } else {
+        let text = `\u{1F4FA} *${movie.title}* - Qismlar (${eps.length} ta)\n\n`;
+        for (const ep of eps) {
+          text += `  ${ep.episodeNumber}-qism${ep.title ? `: ${ep.title}` : ""}\n`;
+          keyboard.push([
+            { text: `\u{1F5D1} ${ep.episodeNumber}-qism`, callback_data: `delete_episode_${ep.id}_${movieId}` }
+          ]);
+        }
+        keyboard.push([{ text: "\u{2795} Qism qo'shish", callback_data: `add_episode_${movieId}` }]);
+        keyboard.push([{ text: "\u{25C0} Orqaga", callback_data: `view_movie_${movieId}` }]);
+
+        await bot!.sendMessage(chatId, text, {
+          parse_mode: "Markdown",
+          reply_markup: { inline_keyboard: keyboard }
+        });
+      }
+      return;
+    }
+
+    if (data.startsWith("add_episode_")) {
+      if (!isAdmin(chatId)) return;
+      const movieId = Number(data.replace("add_episode_", ""));
+      adminState.set(chatId, { step: "episode_number", data: { movieId } });
+      await bot!.sendMessage(chatId, [
+        `\u{2795} *Yangi qism qo'shish*`,
+        ``,
+        `Qism raqamini kiriting:`
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: `episodes_${movieId}` }]]
+        }
+      });
+      return;
+    }
+
+    if (data.startsWith("delete_episode_")) {
+      if (!isAdmin(chatId)) return;
+      const parts = data.replace("delete_episode_", "").split("_");
+      const epId = Number(parts[0]);
+      const movieId = Number(parts[1]);
+      try {
+        await storage.deleteEpisode(epId);
+        await bot!.sendMessage(chatId, "\u{2705} Qism o'chirildi!");
+        const movie = await storage.getMovie(movieId);
+        if (movie) {
+          const eps = await storage.getEpisodes(movieId);
+          const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+
+          if (eps.length === 0) {
+            await bot!.sendMessage(chatId, [
+              `\u{1F4FA} *${movie.title}* - Qismlar`,
+              ``,
+              `Hozircha qismlar yo'q.`
+            ].join("\n"), {
+              parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "\u{2795} Qism qo'shish", callback_data: `add_episode_${movieId}` }],
+                  [{ text: "\u{25C0} Orqaga", callback_data: `view_movie_${movieId}` }]
+                ]
+              }
+            });
+          } else {
+            let text = `\u{1F4FA} *${movie.title}* - Qismlar (${eps.length} ta)\n\n`;
+            for (const ep of eps) {
+              text += `  ${ep.episodeNumber}-qism${ep.title ? `: ${ep.title}` : ""}\n`;
+              keyboard.push([
+                { text: `\u{1F5D1} ${ep.episodeNumber}-qism`, callback_data: `delete_episode_${ep.id}_${movieId}` }
+              ]);
+            }
+            keyboard.push([{ text: "\u{2795} Qism qo'shish", callback_data: `add_episode_${movieId}` }]);
+            keyboard.push([{ text: "\u{25C0} Orqaga", callback_data: `view_movie_${movieId}` }]);
+
+            await bot!.sendMessage(chatId, text, {
+              parse_mode: "Markdown",
+              reply_markup: { inline_keyboard: keyboard }
+            });
+          }
+        }
+      } catch {
+        await bot!.sendMessage(chatId, "\u{274C} Xatolik yuz berdi.");
+      }
+      return;
+    }
+
+    if (data.startsWith("skip_episode_title_")) {
+      if (!isAdmin(chatId)) return;
+      const state = adminState.get(chatId);
+      if (!state || state.step !== "episode_title") return;
+      state.data.episodeTitle = null;
+      state.step = "episode_video";
+      await bot!.sendMessage(chatId, `\u{1F3AC} Video URL manzilini kiriting:`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: `episodes_${state.data.movieId}` }]]
+        }
+      });
+      return;
+    }
+
     if (data === "confirm_add_yes") {
       const state = adminState.get(chatId);
       if (!state || state.step !== "confirm") return;
@@ -1171,6 +1299,74 @@ export function startTelegramBot(): void {
         await bot!.sendMessage(chatId, "\u{274C} Bu kategoriya allaqachon mavjud yoki xatolik yuz berdi.", {
           reply_markup: {
             inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]]
+          }
+        });
+      }
+      return;
+    }
+
+    if (state.step === "episode_number") {
+      if (!isAdmin(chatId)) return;
+      const num = Number(text);
+      if (isNaN(num) || num < 1) {
+        await bot!.sendMessage(chatId, "\u{274C} Iltimos, to'g'ri raqam kiriting (1 dan boshlab):");
+        return;
+      }
+      state.data.episodeNumber = num;
+      state.step = "episode_title";
+      await bot!.sendMessage(chatId, `\u{1F4DD} Qism nomini kiriting:`, {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{23ED} O'tkazish", callback_data: `skip_episode_title_${state.data.movieId}` }],
+            [{ text: "\u{274C} Bekor qilish", callback_data: `episodes_${state.data.movieId}` }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (state.step === "episode_title") {
+      if (!isAdmin(chatId)) return;
+      state.data.episodeTitle = text.trim();
+      state.step = "episode_video";
+      await bot!.sendMessage(chatId, `\u{1F3AC} Video URL manzilini kiriting:`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: `episodes_${state.data.movieId}` }]]
+        }
+      });
+      return;
+    }
+
+    if (state.step === "episode_video") {
+      if (!isAdmin(chatId)) return;
+      const videoUrl = text.trim();
+      const movieId = state.data.movieId;
+      try {
+        await storage.createEpisode({
+          movieId,
+          episodeNumber: state.data.episodeNumber,
+          title: state.data.episodeTitle || null,
+          videoUrl,
+        });
+        adminState.delete(chatId);
+        await bot!.sendMessage(chatId, [
+          `\u{2705} *Qism qo'shildi!*`,
+          ``,
+          `\u{1F4FA} ${state.data.episodeNumber}-qism${state.data.episodeTitle ? `: ${state.data.episodeTitle}` : ""}`
+        ].join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{2795} Yana qism qo'shish", callback_data: `add_episode_${movieId}` }],
+              [{ text: "\u{25C0} Orqaga", callback_data: `episodes_${movieId}` }]
+            ]
+          }
+        });
+      } catch {
+        adminState.delete(chatId);
+        await bot!.sendMessage(chatId, "\u{274C} Xatolik yuz berdi.", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: `episodes_${movieId}` }]]
           }
         });
       }

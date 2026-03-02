@@ -12,15 +12,17 @@ A public movie catalog PWA app named "Kinolar Ilovasi" with a looping galaxy/spa
 - **PWA:** Service worker, manifest.json, installable on mobile devices
 
 ## Key Features
-- Animated galaxy/stars canvas background (shooting stars, nebula, pulsing stars)
+- Looping galaxy/space video background
 - Public movie browsing and rating (no login required)
-- Admin-only movie CRUD from web app and Telegram bot
-- Video upload via web form (file upload or URL) and Telegram bot
+- **Serial/TV show support** with episode playlist, prev/next navigation
+- Admin-only movie/episode CRUD from web app and Telegram bot
+- Video playback: Google Drive, YouTube, Vimeo, OK.ru, Rutube, direct MP4 (all play in-app via iframe/embed)
+- Video upload via web form (up to 2GB) and Telegram bot (up to 20MB, or URL)
 - Image upload via Telegram bot (photo or URL)
-- Video player on movie detail page (HTML5 video + YouTube/Vimeo embed)
 - Movie scraping from external sources via Telegram bot
 - Movie categories and search
 - Star rating system (1-5, anonymous)
+- APK download for Android installation
 - Dark space-themed UI with blue-black tones
 - PWA support (Android/iOS installable)
 - Mobile-responsive design with safe area support

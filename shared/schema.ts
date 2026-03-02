@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, varchar, real } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, varchar, real, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,6 +21,16 @@ export const movies = pgTable("movies", {
   userId: varchar("user_id").notNull(),
   rating: real("rating").default(0),
   ratingCount: integer("rating_count").default(0),
+  isSerial: boolean("is_serial").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const episodes = pgTable("episodes", {
+  id: serial("id").primaryKey(),
+  movieId: integer("movie_id").notNull(),
+  episodeNumber: integer("episode_number").notNull(),
+  title: text("title"),
+  videoUrl: text("video_url").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -38,6 +48,7 @@ export const insertMovieSchema = createInsertSchema(movies).omit({ id: true, cre
     { message: "Video URL noto'g'ri formatda" }
   ),
 });
+export const insertEpisodeSchema = createInsertSchema(episodes).omit({ id: true, createdAt: true });
 export const insertCategorySchema = createInsertSchema(categories).omit({ id: true, createdAt: true });
 
 export type Movie = typeof movies.$inferSelect;
@@ -45,6 +56,8 @@ export type InsertMovie = z.infer<typeof insertMovieSchema>;
 export type UpdateMovieRequest = Partial<InsertMovie>;
 export type Category = typeof categories.$inferSelect;
 export type Rating = typeof ratings.$inferSelect;
+export type Episode = typeof episodes.$inferSelect;
+export type InsertEpisode = z.infer<typeof insertEpisodeSchema>;
 
 export type MovieResponse = Movie & {
   user?: { email: string | null; firstName: string | null; lastName: string | null };

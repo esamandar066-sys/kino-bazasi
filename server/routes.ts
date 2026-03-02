@@ -16,6 +16,7 @@ import { db } from "./db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
 
+const TELEGRAM_ADMIN_ID = process.env.TELEGRAM_ADMIN_ID || "1123019731";
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -335,6 +336,52 @@ export async function registerRoutes(
         return res.status(400).json({ message: err.errors[0].message });
       }
       res.status(500).json({ message: "Failed to rate movie" });
+    }
+  });
+
+  app.get("/api/movies/:id/episodes", async (req, res) => {
+    try {
+      const movieId = Number(req.params.id);
+      const eps = await storage.getEpisodes(movieId);
+      res.json(eps);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch episodes" });
+    }
+  });
+
+  app.post("/api/movies/:id/episodes", isAnyAuthenticated, async (req: any, res) => {
+    try {
+      const movieId = Number(req.params.id);
+      const movie = await storage.getMovie(movieId);
+      if (!movie) return res.status(404).json({ message: "Movie not found" });
+
+      const userId = getAuthUserId(req);
+      if (userId !== TELEGRAM_ADMIN_ID) {
+        return res.status(403).json({ message: "Only admin can add episodes" });
+      }
+
+      const parsed = z.object({
+        episodeNumber: z.number().min(1),
+        title: z.string().nullable().optional(),
+        videoUrl: z.string().min(1),
+      }).parse(req.body);
+
+      const ep = await storage.createEpisode({ movieId, episodeNumber: parsed.episodeNumber, title: parsed.title || null, videoUrl: parsed.videoUrl });
+      res.status(201).json(ep);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to create episode" });
+    }
+  });
+
+  app.delete("/api/episodes/:id", isAnyAuthenticated, async (req: any, res) => {
+    try {
+      await storage.deleteEpisode(Number(req.params.id));
+      res.status(204).end();
+    } catch (err) {
+      res.status(500).json({ message: "Failed to delete episode" });
     }
   });
 

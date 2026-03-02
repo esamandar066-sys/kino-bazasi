@@ -1,18 +1,22 @@
-import { movies, categories, ratings, type MovieResponse, type UpdateMovieRequest, type Category } from "@shared/schema";
+import { movies, categories, ratings, episodes, type MovieResponse, type UpdateMovieRequest, type Category, type Episode, type InsertEpisode } from "@shared/schema";
 import { verificationCodes, users, type VerificationCode, type User, type UpsertUser } from "@shared/models/auth";
 import { db } from "./db";
-import { eq, desc, ilike, and, sql } from "drizzle-orm";
+import { eq, desc, ilike, and, sql, asc } from "drizzle-orm";
 
 export interface IStorage {
   getMovies(): Promise<MovieResponse[]>;
   getMovie(id: number): Promise<MovieResponse | undefined>;
   searchMovies(query?: string, categoryId?: number): Promise<MovieResponse[]>;
-  createMovie(movie: { title: string; description: string; imageUrl?: string | null; releaseYear?: number | null; categoryId?: number | null; userId: string }): Promise<MovieResponse>;
+  createMovie(movie: { title: string; description: string; imageUrl?: string | null; releaseYear?: number | null; categoryId?: number | null; userId: string; isSerial?: boolean }): Promise<MovieResponse>;
   updateMovie(id: number, updates: UpdateMovieRequest): Promise<MovieResponse>;
   deleteMovie(id: number): Promise<void>;
   rateMovie(movieId: number, userId: string, score: number): Promise<MovieResponse>;
   getCategories(): Promise<Category[]>;
   createCategory(name: string): Promise<Category>;
+  getEpisodes(movieId: number): Promise<Episode[]>;
+  createEpisode(data: InsertEpisode): Promise<Episode>;
+  updateEpisode(id: number, updates: Partial<InsertEpisode>): Promise<Episode>;
+  deleteEpisode(id: number): Promise<void>;
   createVerificationCode(phoneNumber: string, code: string): Promise<VerificationCode>;
   getLatestVerificationCode(phoneNumber: string): Promise<VerificationCode | undefined>;
   updateVerificationCodeChatId(id: number, chatId: string): Promise<void>;
@@ -115,7 +119,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createMovie(insertMovie: { title: string; description: string; imageUrl?: string | null; releaseYear?: number | null; categoryId?: number | null; userId: string }): Promise<MovieResponse> {
+  async createMovie(insertMovie: { title: string; description: string; imageUrl?: string | null; releaseYear?: number | null; categoryId?: number | null; userId: string; isSerial?: boolean }): Promise<MovieResponse> {
     const [movie] = await db
       .insert(movies)
       .values(insertMovie)
@@ -134,6 +138,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteMovie(id: number): Promise<void> {
+    await db.delete(episodes).where(eq(episodes.movieId, id));
     await db.delete(ratings).where(eq(ratings.movieId, id));
     await db.delete(movies).where(eq(movies.id, id));
   }
@@ -168,6 +173,34 @@ export class DatabaseStorage implements IStorage {
   async createCategory(name: string): Promise<Category> {
     const [cat] = await db.insert(categories).values({ name }).returning();
     return cat;
+  }
+
+  async getEpisodes(movieId: number): Promise<Episode[]> {
+    return await db.select().from(episodes)
+      .where(eq(episodes.movieId, movieId))
+      .orderBy(asc(episodes.episodeNumber));
+  }
+
+  async createEpisode(data: InsertEpisode): Promise<Episode> {
+    const [ep] = await db.insert(episodes).values(data).returning();
+    await db.update(movies).set({ isSerial: true }).where(eq(movies.id, data.movieId));
+    return ep;
+  }
+
+  async updateEpisode(id: number, updates: Partial<InsertEpisode>): Promise<Episode> {
+    const [ep] = await db.update(episodes).set(updates).where(eq(episodes.id, id)).returning();
+    return ep;
+  }
+
+  async deleteEpisode(id: number): Promise<void> {
+    const [ep] = await db.select().from(episodes).where(eq(episodes.id, id));
+    await db.delete(episodes).where(eq(episodes.id, id));
+    if (ep) {
+      const remaining = await this.getEpisodes(ep.movieId);
+      if (remaining.length === 0) {
+        await db.update(movies).set({ isSerial: false }).where(eq(movies.id, ep.movieId));
+      }
+    }
   }
 
   async createVerificationCode(phoneNumber: string, code: string): Promise<VerificationCode> {

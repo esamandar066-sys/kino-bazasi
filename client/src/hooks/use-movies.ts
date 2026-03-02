@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
-import type { InsertMovie, MovieResponse, UpdateMovieRequest, Category } from "@shared/schema";
+import type { InsertMovie, MovieResponse, UpdateMovieRequest, Category, Episode } from "@shared/schema";
 
 export function useMovies() {
   return useQuery({
@@ -119,6 +119,18 @@ export function useDeleteMovie() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.movies.list.path] });
     },
+  });
+}
+
+export function useEpisodes(movieId: number) {
+  return useQuery({
+    queryKey: ['/api/movies', movieId, 'episodes'],
+    queryFn: async () => {
+      const res = await fetch(`/api/movies/${movieId}/episodes`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch episodes");
+      return (await res.json()) as Episode[];
+    },
+    enabled: !!movieId,
   });
 }
 

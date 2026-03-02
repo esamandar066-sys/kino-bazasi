@@ -1,13 +1,13 @@
 import { useParams, useLocation } from "wouter";
-import { useMovie, useDeleteMovie, useRateMovie } from "@/hooks/use-movies";
+import { useMovie, useDeleteMovie, useRateMovie, useEpisodes } from "@/hooks/use-movies";
 import { useAuth } from "@/hooks/use-auth";
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Edit, Trash2, Calendar, Clock, Star, Play } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Edit, Trash2, Calendar, Clock, Star, Play, SkipBack, SkipForward } from "lucide-react";
+import { useState, useEffect } from "react";
 import MovieFormDialog from "@/components/movies/MovieFormDialog";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -28,6 +28,7 @@ export default function MovieDetail() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [hoverRating, setHoverRating] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
 
   const fallbackImage = "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=1920&q=80";
 
@@ -57,6 +58,16 @@ export default function MovieDetail() {
     );
   }
 
+  const { data: episodes = [] } = useEpisodes(movie.id);
+  const hasEpisodes = episodes.length > 0;
+  const currentEpisode = hasEpisodes ? episodes[currentEpisodeIndex] : null;
+
+  useEffect(() => {
+    if (hasEpisodes) {
+      setShowVideo(true);
+    }
+  }, [hasEpisodes]);
+
   const handleDelete = async () => {
     try {
       await deleteMutation.mutateAsync(movie.id);
@@ -76,7 +87,8 @@ export default function MovieDetail() {
     }
   };
 
-  const hasVideo = !!movie.videoUrl;
+  const activeVideoUrl = hasEpisodes ? currentEpisode!.videoUrl : movie.videoUrl;
+  const hasVideo = !!activeVideoUrl;
 
   function getEmbedUrl(url: string): string | null {
     if (url.includes("youtube.com/watch")) {
@@ -111,14 +123,56 @@ export default function MovieDetail() {
     return null;
   }
 
-  const isLocalVideo = movie.videoUrl && movie.videoUrl.startsWith("/uploads/");
-  const isDirectVideo = movie.videoUrl && (
+  const isLocalVideo = activeVideoUrl && activeVideoUrl.startsWith("/uploads/");
+  const isDirectVideo = activeVideoUrl && (
     isLocalVideo ||
-    movie.videoUrl.endsWith(".mp4") ||
-    movie.videoUrl.endsWith(".webm") ||
-    movie.videoUrl.endsWith(".ogg")
+    activeVideoUrl.endsWith(".mp4") ||
+    activeVideoUrl.endsWith(".webm") ||
+    activeVideoUrl.endsWith(".ogg")
   );
-  const embedUrl = movie.videoUrl ? getEmbedUrl(movie.videoUrl) : null;
+  const embedUrl = activeVideoUrl ? getEmbedUrl(activeVideoUrl) : null;
+
+  function renderVideoPlayer() {
+    if (!activeVideoUrl) return null;
+    if (isDirectVideo) {
+      return (
+        <video
+          key={activeVideoUrl}
+          controls
+          autoPlay
+          className="w-full max-h-[70vh]"
+          data-testid="video-player"
+        >
+          <source src={activeVideoUrl} />
+          Brauzeringiz video formatini qo'llab-quvvatlamaydi.
+        </video>
+      );
+    }
+    if (embedUrl) {
+      return (
+        <iframe
+          key={activeVideoUrl}
+          src={embedUrl}
+          className="w-full aspect-video"
+          allowFullScreen
+          allow="autoplay; encrypted-media; fullscreen"
+          referrerPolicy="no-referrer"
+          data-testid="video-iframe"
+        />
+      );
+    }
+    return (
+      <iframe
+        key={activeVideoUrl}
+        src={activeVideoUrl}
+        className="w-full aspect-video"
+        allowFullScreen
+        allow="autoplay; encrypted-media; fullscreen"
+        referrerPolicy="no-referrer"
+        data-testid="video-iframe-generic"
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen pb-20 relative z-10">
@@ -170,46 +224,82 @@ export default function MovieDetail() {
         >
           <div className="bg-black rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/10">
             <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute top-3 right-3 z-30 text-white bg-black/50 hover:bg-black/70 rounded-full backdrop-blur-sm"
-                onClick={() => setShowVideo(false)}
-                data-testid="button-close-video"
-              >
-                Yopish
-              </Button>
-              {isDirectVideo ? (
-                <video
-                  controls
-                  autoPlay
-                  className="w-full max-h-[70vh]"
-                  data-testid="video-player"
+              {!hasEpisodes && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-3 right-3 z-30 text-white bg-black/50 hover:bg-black/70 rounded-full backdrop-blur-sm"
+                  onClick={() => setShowVideo(false)}
+                  data-testid="button-close-video"
                 >
-                  <source src={movie.videoUrl!} />
-                  Brauzeringiz video formatini qo'llab-quvvatlamaydi.
-                </video>
-              ) : embedUrl ? (
-                <iframe
-                  src={embedUrl}
-                  className="w-full aspect-video"
-                  allowFullScreen
-                  allow="autoplay; encrypted-media; fullscreen"
-                  referrerPolicy="no-referrer"
-                  data-testid="video-iframe"
-                />
-              ) : (
-                <iframe
-                  src={movie.videoUrl!}
-                  className="w-full aspect-video"
-                  allowFullScreen
-                  allow="autoplay; encrypted-media; fullscreen"
-                  referrerPolicy="no-referrer"
-                  data-testid="video-iframe-generic"
-                />
+                  Yopish
+                </Button>
               )}
+              {renderVideoPlayer()}
             </div>
           </div>
+
+          {hasEpisodes && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              <Button
+                variant="ghost"
+                className="text-white/80 border border-white/10 rounded-lg"
+                disabled={currentEpisodeIndex === 0}
+                onClick={() => setCurrentEpisodeIndex((i) => i - 1)}
+                data-testid="button-prev-episode"
+              >
+                <SkipBack className="w-4 h-4 mr-2" />
+                Oldingi qism
+              </Button>
+              <span className="text-white font-semibold text-sm px-4 py-2 bg-white/5 rounded-lg border border-white/10" data-testid="text-episode-info">
+                {currentEpisodeIndex + 1} / {episodes.length}-qism
+              </span>
+              <Button
+                variant="ghost"
+                className="text-white/80 border border-white/10 rounded-lg"
+                disabled={currentEpisodeIndex === episodes.length - 1}
+                onClick={() => setCurrentEpisodeIndex((i) => i + 1)}
+                data-testid="button-next-episode"
+              >
+                Keyingi qism
+                <SkipForward className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          )}
+
+          {hasEpisodes && (
+            <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm" data-testid="episode-list">
+              <div className="p-2 flex flex-col gap-1">
+                {episodes.map((ep, idx) => (
+                  <motion.button
+                    key={ep.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.03 }}
+                    onClick={() => setCurrentEpisodeIndex(idx)}
+                    className={`w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 transition-colors ${
+                      idx === currentEpisodeIndex
+                        ? "bg-primary/20 text-white border border-primary/30"
+                        : "text-white/70 hover-elevate"
+                    }`}
+                    data-testid={`episode-item-${ep.id}`}
+                  >
+                    <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      idx === currentEpisodeIndex ? "bg-primary text-white" : "bg-white/10 text-white/50"
+                    }`}>
+                      {ep.episodeNumber}
+                    </span>
+                    <span className="truncate text-sm font-medium">
+                      {ep.title || `${ep.episodeNumber}-qism`}
+                    </span>
+                    {idx === currentEpisodeIndex && (
+                      <Play className="w-4 h-4 ml-auto flex-shrink-0 text-primary fill-primary" />
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          )}
         </motion.div>
       )}
 
