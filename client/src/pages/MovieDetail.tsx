@@ -19,7 +19,9 @@ export default function MovieDetail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { data: movie, isLoading, error } = useMovie(Number(id));
+  const movieId = Number(id);
+  const { data: movie, isLoading, error } = useMovie(movieId);
+  const { data: episodes = [] } = useEpisodes(movieId);
   const { user } = useAuth();
   const isAdmin = user?.id === ADMIN_ID;
   const deleteMutation = useDeleteMovie();
@@ -29,6 +31,15 @@ export default function MovieDetail() {
   const [hoverRating, setHoverRating] = useState(0);
   const [showVideo, setShowVideo] = useState(false);
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+
+  const hasEpisodes = episodes.length > 0;
+  const currentEpisode = hasEpisodes ? episodes[currentEpisodeIndex] : null;
+
+  useEffect(() => {
+    if (hasEpisodes) {
+      setShowVideo(true);
+    }
+  }, [hasEpisodes]);
 
   const fallbackImage = "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=1920&q=80";
 
@@ -57,16 +68,6 @@ export default function MovieDetail() {
       </div>
     );
   }
-
-  const { data: episodes = [] } = useEpisodes(movie.id);
-  const hasEpisodes = episodes.length > 0;
-  const currentEpisode = hasEpisodes ? episodes[currentEpisodeIndex] : null;
-
-  useEffect(() => {
-    if (hasEpisodes) {
-      setShowVideo(true);
-    }
-  }, [hasEpisodes]);
 
   const handleDelete = async () => {
     try {
