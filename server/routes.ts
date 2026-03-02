@@ -317,7 +317,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.movies.rate.path, isAnyAuthenticated, async (req: any, res) => {
+  app.post(api.movies.rate.path, async (req: any, res) => {
     try {
       const id = Number(req.params.id);
       const existing = await storage.getMovie(id);
@@ -326,7 +326,7 @@ export async function registerRoutes(
       }
 
       const { score } = api.movies.rate.input.parse(req.body);
-      const userId = getAuthUserId(req)!;
+      const userId = getAuthUserId(req) || `anon_${req.ip || 'unknown'}`;
 
       const movie = await storage.rateMovie(id, userId, score);
       res.json(movie);

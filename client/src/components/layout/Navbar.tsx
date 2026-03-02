@@ -1,19 +1,20 @@
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Clapperboard, LogIn, LogOut, Plus, User as UserIcon, Search, X } from "lucide-react";
+import { Clapperboard, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import MovieFormDialog from "../movies/MovieFormDialog";
+
+const ADMIN_ID = "1123019731";
 
 interface NavbarProps {
   onSearch?: (query: string) => void;
 }
 
 export default function Navbar({ onSearch }: NavbarProps) {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user } = useAuth();
+  const isAdmin = user?.id === ADMIN_ID;
   const [isScrolled, setIsScrolled] = useState(false);
   const [isAddMovieOpen, setIsAddMovieOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,22 +33,24 @@ export default function Navbar({ onSearch }: NavbarProps) {
     onSearch?.(searchQuery);
   };
 
-  const displayName = user?.firstName || user?.phoneNumber || user?.email || "User";
-
   return (
     <header
-      className={`fixed top-0 w-full z-50 transition-colors duration-300 safe-area-top ${
-        isScrolled ? "bg-background/95 backdrop-blur-md shadow-lg shadow-black/50" : "bg-gradient-to-b from-black/80 to-transparent"
+      className={`fixed top-0 w-full z-50 transition-all duration-500 safe-area-top ${
+        isScrolled
+          ? "bg-black/80 backdrop-blur-xl shadow-2xl shadow-black/50 border-b border-white/5"
+          : "bg-gradient-to-b from-black/90 via-black/40 to-transparent"
       }`}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-3 sm:gap-8 flex-shrink-0">
           <Link
             href="/"
-            className="flex items-center gap-2 text-primary hover:scale-105 transition-transform"
+            className="flex items-center gap-2.5 text-primary hover:scale-105 transition-transform group"
           >
-            <Clapperboard className="w-7 h-7 sm:w-8 sm:h-8" />
-            <span className="text-xl sm:text-2xl font-black tracking-wider uppercase hidden sm:inline" data-testid="text-logo">
+            <div className="relative">
+              <Clapperboard className="w-7 h-7 sm:w-9 sm:h-9 transition-all group-hover:drop-shadow-[0_0_8px_rgba(229,9,20,0.6)]" />
+            </div>
+            <span className="text-xl sm:text-2xl font-black tracking-widest uppercase hidden sm:inline bg-gradient-to-r from-primary via-red-400 to-primary bg-clip-text text-transparent" data-testid="text-logo">
               Kinolar
             </span>
           </Link>
@@ -55,8 +58,8 @@ export default function Navbar({ onSearch }: NavbarProps) {
 
         {onSearch && !mobileSearchOpen && (
           <form onSubmit={handleSearchSubmit} className="flex-1 max-w-md mx-4 hidden md:block">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/40 group-focus-within:text-primary transition-colors" />
               <Input
                 type="search"
                 placeholder="Kino qidirish..."
@@ -65,7 +68,7 @@ export default function Navbar({ onSearch }: NavbarProps) {
                   setSearchQuery(e.target.value);
                   onSearch(e.target.value);
                 }}
-                className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 focus:bg-white/10 focus:border-primary/50 rounded-full transition-all"
                 data-testid="input-search"
               />
             </div>
@@ -75,7 +78,7 @@ export default function Navbar({ onSearch }: NavbarProps) {
         {mobileSearchOpen && onSearch && (
           <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2 md:hidden">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-white/40" />
               <Input
                 type="search"
                 placeholder="Kino qidirish..."
@@ -84,7 +87,7 @@ export default function Navbar({ onSearch }: NavbarProps) {
                   setSearchQuery(e.target.value);
                   onSearch(e.target.value);
                 }}
-                className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50 h-10"
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30 h-10 rounded-full"
                 data-testid="input-search-mobile"
                 autoFocus
               />
@@ -96,7 +99,7 @@ export default function Navbar({ onSearch }: NavbarProps) {
                 setSearchQuery("");
                 onSearch("");
               }}
-              className="text-white p-2"
+              className="text-white/70 p-2 hover:text-white transition-colors"
               data-testid="button-close-search"
             >
               <X className="w-5 h-5" />
@@ -105,23 +108,23 @@ export default function Navbar({ onSearch }: NavbarProps) {
         )}
 
         {!mobileSearchOpen && (
-          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {onSearch && (
               <button
                 onClick={() => setMobileSearchOpen(true)}
-                className="md:hidden text-white p-2"
+                className="md:hidden text-white/70 p-2 hover:text-white transition-colors"
                 data-testid="button-open-search"
               >
                 <Search className="w-5 h-5" />
               </button>
             )}
 
-            {isAuthenticated ? (
+            {isAdmin && (
               <>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="hidden md:flex bg-transparent border-white/20 text-white"
+                  className="hidden md:flex bg-primary/10 border-primary/30 text-primary hover:bg-primary hover:text-white transition-all duration-300"
                   onClick={() => setIsAddMovieOpen(true)}
                   data-testid="button-add-movie"
                 >
@@ -132,7 +135,7 @@ export default function Navbar({ onSearch }: NavbarProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden text-white"
+                  className="md:hidden text-primary hover:bg-primary/20"
                   onClick={() => setIsAddMovieOpen(true)}
                   data-testid="button-add-movie-mobile"
                 >
@@ -143,40 +146,7 @@ export default function Navbar({ onSearch }: NavbarProps) {
                   open={isAddMovieOpen}
                   onOpenChange={setIsAddMovieOpen}
                 />
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full p-0 ring-2 ring-transparent hover:ring-primary transition-all" data-testid="button-user-menu">
-                      <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
-                        <AvatarImage src={user?.profileImageUrl || undefined} alt={displayName} />
-                        <AvatarFallback className="bg-primary/20 text-primary text-sm">
-                          {displayName[0]?.toUpperCase() || <UserIcon className="w-4 h-4" />}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <DropdownMenuLabel className="font-normal">
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none text-foreground" data-testid="text-user-name">{displayName}</p>
-                        <p className="text-xs leading-none text-muted-foreground" data-testid="text-user-info">{user?.email || user?.phoneNumber || ""}</p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => logout()} className="text-destructive focus:bg-destructive/10 cursor-pointer" data-testid="button-logout">
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Chiqish
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </>
-            ) : (
-              <Link href="/login">
-                <Button className="bg-primary text-white font-semibold px-4 sm:px-6 shadow-lg shadow-primary/25 text-sm sm:text-base" data-testid="button-login">
-                  <LogIn className="w-4 h-4 mr-1 sm:mr-2" />
-                  Kirish
-                </Button>
-              </Link>
             )}
           </div>
         )}
