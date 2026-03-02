@@ -171,31 +171,16 @@ export default function MovieDetail() {
         </video>
       );
     }
-    const originalUrl = activeVideoUrl.replace(/\/videoembed\//, '/video/').replace(/\/embed\//, '/video/').replace(/\?.*$/, '');
     if (embedUrl) {
       return (
-        <div className="relative">
-          <iframe
-            key={activeVideoUrl}
-            src={embedUrl}
-            className="w-full aspect-video"
-            allowFullScreen
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-            data-testid="video-iframe"
-          />
-          <div className="flex justify-center mt-2">
-            <a
-              href={activeVideoUrl.includes("videoembed") || activeVideoUrl.includes("embed") ? originalUrl : activeVideoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-primary hover:underline flex items-center gap-1"
-              data-testid="link-external-video"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Saytda ochish
-            </a>
-          </div>
-        </div>
+        <iframe
+          key={activeVideoUrl}
+          src={embedUrl}
+          className="w-full aspect-video"
+          allowFullScreen
+          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+          data-testid="video-iframe"
+        />
       );
     }
     return (
