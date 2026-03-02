@@ -1,6 +1,9 @@
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "./storage";
 import { scrapeAndSaveMovies, getAvailableCategories } from "./scraper";
+import { db } from "./db";
+import { botUsers } from "@shared/schema";
+import { eq, sql, count } from "drizzle-orm";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const ADMIN_ID = Number(process.env.TELEGRAM_ADMIN_ID!);
@@ -8,6 +11,21 @@ const ADMIN_ID = Number(process.env.TELEGRAM_ADMIN_ID!);
 let bot: TelegramBot | null = null;
 let botUsername: string = "";
 const userChatIds: Map<string, number> = new Map();
+
+async function trackBotUser(msg: TelegramBot.Message) {
+  const chatId = String(msg.chat.id);
+  const username = msg.from?.username || null;
+  const firstName = msg.from?.first_name || null;
+  const lastName = msg.from?.last_name || null;
+  try {
+    await db.insert(botUsers)
+      .values({ chatId, username, firstName, lastName })
+      .onConflictDoUpdate({
+        target: botUsers.chatId,
+        set: { username, firstName, lastName, lastActive: new Date() }
+      });
+  } catch (e) {}
+}
 
 export function getBotUsername(): string {
   return botUsername;
@@ -77,6 +95,7 @@ export function startTelegramBot(): void {
   bot.onText(/\/start(.*)/, async (msg, match) => {
     const chatId = msg.chat.id;
     const param = match?.[1]?.trim();
+    trackBotUser(msg);
 
     if (param && param.startsWith("verify_")) {
       const phoneNumber = param.replace("verify_", "");
@@ -131,10 +150,14 @@ export function startTelegramBot(): void {
             { text: "\u{1F5D1} Kino o'chirish", callback_data: "admin_delete_movie" }
           ],
           [
+            { text: "\u{1F465} Foydalanuvchilar", callback_data: "admin_users" },
             { text: "\u{1F310} Kinolar yuklash", callback_data: "admin_scrape" }
           ],
           [
-            { text: "\u{1F465} Foydalanuvchi rejimi", callback_data: "user_menu" }
+            { text: "\u{1F4E2} Xabar yuborish", callback_data: "admin_broadcast" }
+          ],
+          [
+            { text: "\u{1F464} Foydalanuvchi rejimi", callback_data: "user_menu" }
           ]
         ]
       }
@@ -370,25 +393,110 @@ export function startTelegramBot(): void {
     if (data === "admin_stats") {
       const movies = await storage.getMovies();
       const cats = await storage.getCategories();
-      const topMovies = [...movies].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 3);
+      const [userCountResult] = await db.select({ count: count() }).from(botUsers);
+      const totalUsers = userCountResult?.count || 0;
+      const topMovies = [...movies].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 5);
+      const totalRatings = movies.reduce((sum, m) => sum + (m.ratingCount || 0), 0);
+      const serialCount = movies.filter(m => m.isSerial).length;
 
       let topText = "";
       topMovies.forEach((m, i) => {
-        topText += `  ${i + 1}. ${m.title} - \u{2B50}${m.rating?.toFixed(1) || "0"}\n`;
+        topText += `  ${i + 1}. ${m.title} - \u{2B50}${m.rating?.toFixed(1) || "0"} (${m.ratingCount || 0} baho)\n`;
       });
 
       await bot!.sendMessage(chatId, [
         `\u{1F4CA} *Statistika*`,
         ``,
+        `\u{1F465} Bot foydalanuvchilari: ${totalUsers}`,
         `\u{1F3AC} Kinolar: ${movies.length}`,
+        `\u{1F4FA} Seriallar: ${serialCount}`,
         `\u{1F4C1} Kategoriyalar: ${cats.length}`,
+        `\u{2B50} Jami baholar: ${totalRatings}`,
         ``,
-        `\u{1F3C6} *Top kinolar:*`,
+        `\u{1F3C6} *Top 5 kino:*`,
         topText || "  Hozircha baholangan kino yo'q"
       ].join("\n"), {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]]
+        }
+      });
+      return;
+    }
+
+    if (data === "admin_users") {
+      if (!isAdmin(chatId)) return;
+      const allUsers = await db.select().from(botUsers).orderBy(botUsers.lastActive);
+      const total = allUsers.length;
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const activeToday = allUsers.filter(u => u.lastActive && u.lastActive > oneDayAgo).length;
+      const activeWeek = allUsers.filter(u => u.lastActive && u.lastActive > oneWeekAgo).length;
+
+      const recentUsers = allUsers.slice(-10).reverse();
+      let userList = "";
+      recentUsers.forEach((u, i) => {
+        const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || "Nomsiz";
+        const uname = u.username ? `@${u.username}` : "";
+        userList += `  ${i + 1}. ${name} ${uname}\n`;
+      });
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F465} *Foydalanuvchilar*`,
+        ``,
+        `\u{1F4CA} Jami: ${total}`,
+        `\u{1F7E2} Bugun faol: ${activeToday}`,
+        `\u{1F535} Hafta faol: ${activeWeek}`,
+        ``,
+        `\u{1F551} *Oxirgi foydalanuvchilar:*`,
+        userList || "  Hozircha foydalanuvchilar yo'q"
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{1F4CB} To'liq ro'yxat", callback_data: "admin_users_full" }],
+            [{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data === "admin_users_full") {
+      if (!isAdmin(chatId)) return;
+      const allUsers = await db.select().from(botUsers).orderBy(botUsers.createdAt);
+      if (allUsers.length === 0) {
+        await bot!.sendMessage(chatId, "\u{1F4ED} Hozircha foydalanuvchilar yo'q.", {
+          reply_markup: { inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_users" }]] }
+        });
+        return;
+      }
+      let text = `\u{1F465} *Barcha foydalanuvchilar (${allUsers.length}):*\n\n`;
+      allUsers.forEach((u, i) => {
+        const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || "Nomsiz";
+        const uname = u.username ? ` (@${u.username})` : "";
+        text += `${i + 1}. ${name}${uname}\n`;
+      });
+      if (text.length > 4000) text = text.substring(0, 4000) + "\n...";
+      await bot!.sendMessage(chatId, text, {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_users" }]] }
+      });
+      return;
+    }
+
+    if (data === "admin_broadcast") {
+      if (!isAdmin(chatId)) return;
+      adminState.set(chatId, { step: "broadcast_message", data: {} });
+      await bot!.sendMessage(chatId, [
+        `\u{1F4E2} *Xabar yuborish*`,
+        ``,
+        `Barcha foydalanuvchilarga yuboriladigan xabarni yozing:`
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }]]
         }
       });
       return;
@@ -1129,11 +1237,43 @@ export function startTelegramBot(): void {
   // Handle text messages for step-by-step flows and movie lookup by ID
   bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
+    trackBotUser(msg);
     if (msg.text?.startsWith("/")) return;
     if (msg.video || msg.document || msg.photo) return;
 
     const text = msg.text || "";
     const state = adminState.get(chatId);
+
+    if (state?.step === "broadcast_message") {
+      if (!isAdmin(chatId)) return;
+      const broadcastText = text.trim();
+      if (!broadcastText) return;
+      const allUsers = await db.select().from(botUsers);
+      let sent = 0;
+      let failed = 0;
+      for (const user of allUsers) {
+        try {
+          await bot!.sendMessage(Number(user.chatId), broadcastText);
+          sent++;
+        } catch (e) {
+          failed++;
+        }
+      }
+      adminState.delete(chatId);
+      await bot!.sendMessage(chatId, [
+        `\u{2705} *Xabar yuborildi!*`,
+        ``,
+        `\u{1F4E8} Yuborildi: ${sent}`,
+        `\u{274C} Xato: ${failed}`,
+        `\u{1F465} Jami: ${allUsers.length}`
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]]
+        }
+      });
+      return;
+    }
 
     if (!state) {
       const trimmed = text.trim();

@@ -42,6 +42,16 @@ export const ratings = pgTable("ratings", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const botUsers = pgTable("bot_users", {
+  id: serial("id").primaryKey(),
+  chatId: varchar("chat_id").notNull().unique(),
+  username: text("username"),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  lastActive: timestamp("last_active").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertMovieSchema = createInsertSchema(movies).omit({ id: true, createdAt: true, userId: true, rating: true, ratingCount: true }).extend({
   videoUrl: z.string().nullable().optional().refine(
     (val) => !val || val.startsWith("/uploads/") || val.startsWith("https://") || val.startsWith("http://"),
@@ -58,6 +68,8 @@ export type Category = typeof categories.$inferSelect;
 export type Rating = typeof ratings.$inferSelect;
 export type Episode = typeof episodes.$inferSelect;
 export type InsertEpisode = z.infer<typeof insertEpisodeSchema>;
+
+export type BotUser = typeof botUsers.$inferSelect;
 
 export type MovieResponse = Movie & {
   user?: { email: string | null; firstName: string | null; lastName: string | null };
