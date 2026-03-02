@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Clapperboard, Plus, Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import MovieFormDialog from "../movies/MovieFormDialog";
 
@@ -45,11 +45,8 @@ export default function Navbar({ onSearch }: NavbarProps) {
         <div className="flex items-center gap-3 sm:gap-8 flex-shrink-0">
           <Link
             href="/"
-            className="flex items-center gap-2.5 text-primary hover:scale-105 transition-transform group"
+            className="hover:scale-105 transition-transform"
           >
-            <div className="relative">
-              <Clapperboard className="w-7 h-7 sm:w-9 sm:h-9 transition-all group-hover:drop-shadow-[0_0_8px_rgba(229,9,20,0.6)]" />
-            </div>
             <span className="text-xl sm:text-2xl font-black tracking-widest uppercase bg-gradient-to-r from-primary via-red-400 to-primary bg-clip-text text-transparent" data-testid="text-logo">
               Kinolar
             </span>
