@@ -1,13 +1,29 @@
 {
-  "name": "Kinolar - Kino Katalog",
+  "name": "Kinolar Ilovasi",
   "short_name": "Kinolar",
-  "description": "Kinolarni ko'ring, izlang va baholang",
+  "description": "Kinolarni ko'ring, izlang va baholang - eng yaxshi kinolar to'plami",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#141414",
+  "background_color": "#0a0510",
   "theme_color": "#E50914",
   "orientation": "portrait-primary",
   "icons": [
+    {
+      "src": "/icons/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",

@@ -1,7 +1,7 @@
-# Kinolar - Movie Catalog Application
+# Kinolar Ilovasi - Movie Catalog Application
 
 ## Overview
-A public movie catalog with animated galaxy/stars background. Admin (ID: 1123019731) can add/edit/delete movies from the web app and Telegram bot. All visitors can browse and rate movies without login.
+A public movie catalog PWA app named "Kinolar Ilovasi" with a looping galaxy/space video background. Uses custom K-logo (red play button on black film strip). Admin (ID: 1123019731) can add/edit/delete movies from the web app and Telegram bot. All visitors can browse and rate movies without login.
 
 ## Architecture
 - **Frontend:** React + TypeScript + Vite + TailwindCSS + shadcn/ui + Framer Motion

@@ -2,7 +2,8 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Clapperboard, Plus, Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
+import appLogoPath from "@assets/ChatGPT_Image_2_мар._2026_г.,_06_27_14_1772415142581.png";
 import { useEffect, useState } from "react";
 import MovieFormDialog from "../movies/MovieFormDialog";
 
@@ -45,11 +46,13 @@ export default function Navbar({ onSearch }: NavbarProps) {
         <div className="flex items-center gap-3 sm:gap-8 flex-shrink-0">
           <Link
             href="/"
-            className="flex items-center gap-2.5 text-primary hover:scale-105 transition-transform group"
+            className="flex items-center gap-2.5 hover:scale-105 transition-transform group"
           >
-            <div className="relative">
-              <Clapperboard className="w-7 h-7 sm:w-9 sm:h-9 transition-all group-hover:drop-shadow-[0_0_8px_rgba(229,9,20,0.6)]" />
-            </div>
+            <img
+              src={appLogoPath}
+              alt="Kinolar"
+              className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg shadow-lg shadow-primary/20 group-hover:shadow-primary/40 transition-shadow"
+            />
             <span className="text-xl sm:text-2xl font-black tracking-widest uppercase hidden sm:inline bg-gradient-to-r from-primary via-red-400 to-primary bg-clip-text text-transparent" data-testid="text-logo">
               Kinolar
             </span>
