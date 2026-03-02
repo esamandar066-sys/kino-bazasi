@@ -91,7 +91,20 @@ export default function MovieDetail() {
   const activeVideoUrl = hasEpisodes ? currentEpisode!.videoUrl : movie.videoUrl;
   const hasVideo = !!activeVideoUrl;
 
+  function extractSrcFromIframe(html: string): string | null {
+    const match = html.match(/src=["']([^"']+)["']/);
+    if (match) {
+      let src = match[1];
+      if (src.startsWith("//")) src = "https:" + src;
+      return src;
+    }
+    return null;
+  }
+
   function getEmbedUrl(url: string): string | null {
+    if (url.includes("<iframe") || url.includes("&lt;iframe")) {
+      return extractSrcFromIframe(url);
+    }
     if (url.includes("youtube.com/watch")) {
       const id = new URL(url).searchParams.get("v");
       return id ? `https://www.youtube.com/embed/${id}?autoplay=1` : null;
@@ -129,9 +142,6 @@ export default function MovieDetail() {
     if (url.includes("rutube.ru/video/")) {
       const id = url.match(/video\/([a-f0-9]+)/)?.[1];
       return id ? `https://rutube.ru/play/embed/${id}` : null;
-    }
-    if (url.includes("iframe") || url.includes("embed")) {
-      return url;
     }
     return null;
   }

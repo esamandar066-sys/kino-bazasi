@@ -1339,7 +1339,13 @@ export function startTelegramBot(): void {
 
     if (state.step === "episode_video") {
       if (!isAdmin(chatId)) return;
-      const videoUrl = text.trim();
+      let videoUrl = text.trim();
+      if (videoUrl.includes("<iframe") || videoUrl.includes("&lt;iframe")) {
+        const srcMatch = videoUrl.match(/src=["']([^"']+)["']/);
+        if (srcMatch) {
+          videoUrl = srcMatch[1].startsWith("//") ? "https:" + srcMatch[1] : srcMatch[1];
+        }
+      }
       const movieId = state.data.movieId;
       try {
         await storage.createEpisode({
@@ -1420,7 +1426,14 @@ export function startTelegramBot(): void {
         });
         break;
       case "video":
-        state.data.videoUrl = text;
+        let videoInput = text.trim();
+        if (videoInput.includes("<iframe") || videoInput.includes("&lt;iframe")) {
+          const srcMatch = videoInput.match(/src=["']([^"']+)["']/);
+          if (srcMatch) {
+            videoInput = srcMatch[1].startsWith("//") ? "https:" + srcMatch[1] : srcMatch[1];
+          }
+        }
+        state.data.videoUrl = videoInput;
         state.step = "category";
         await showCategorySelection(chatId);
         break;
