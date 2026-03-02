@@ -61,7 +61,13 @@ export function startTelegramBot(): void {
     return;
   }
 
-  bot = new TelegramBot(BOT_TOKEN, { polling: true });
+  if (bot) {
+    try {
+      bot.stopPolling();
+    } catch {}
+  }
+
+  bot = new TelegramBot(BOT_TOKEN, { polling: { params: { timeout: 10 } } });
 
   bot.getMe().then((me) => {
     botUsername = me.username || "";
