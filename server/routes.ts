@@ -338,5 +338,24 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/download-apk", (_req, res) => {
+    const apkPath = path.join(uploadsDir, "Kinolar.apk");
+    if (fs.existsSync(apkPath) && fs.statSync(apkPath).size > 0) {
+      res.download(apkPath, "Kinolar.apk");
+    } else {
+      res.status(404).json({ message: "APK fayl hali yuklanmagan" });
+    }
+  });
+
+  app.post("/api/upload-apk", isAnyAuthenticated, upload.single("apk"), async (req: any, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "APK fayl yuborilmadi" });
+    }
+    const dest = path.join(uploadsDir, "Kinolar.apk");
+    fs.copyFileSync(req.file.path, dest);
+    fs.unlinkSync(req.file.path);
+    res.json({ message: "APK muvaffaqiyatli yuklandi", size: fs.statSync(dest).size });
+  });
+
   return httpServer;
 }
