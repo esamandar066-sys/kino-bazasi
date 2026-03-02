@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Edit, Trash2, Calendar, Clock, Star, Play, SkipBack, SkipForward } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Calendar, Clock, Star, Play, SkipBack, SkipForward, ExternalLink } from "lucide-react";
 import { useState, useEffect } from "react";
 import MovieFormDialog from "@/components/movies/MovieFormDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -171,16 +171,31 @@ export default function MovieDetail() {
         </video>
       );
     }
+    const originalUrl = activeVideoUrl.replace(/\/videoembed\//, '/video/').replace(/\/embed\//, '/video/').replace(/\?.*$/, '');
     if (embedUrl) {
       return (
-        <iframe
-          key={activeVideoUrl}
-          src={embedUrl}
-          className="w-full aspect-video"
-          allowFullScreen
-          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-          data-testid="video-iframe"
-        />
+        <div className="relative">
+          <iframe
+            key={activeVideoUrl}
+            src={embedUrl}
+            className="w-full aspect-video"
+            allowFullScreen
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            data-testid="video-iframe"
+          />
+          <div className="flex justify-center mt-2">
+            <a
+              href={activeVideoUrl.includes("videoembed") || activeVideoUrl.includes("embed") ? originalUrl : activeVideoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary hover:underline flex items-center gap-1"
+              data-testid="link-external-video"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Saytda ochish
+            </a>
+          </div>
+        </div>
       );
     }
     return (
@@ -190,7 +205,6 @@ export default function MovieDetail() {
         className="w-full aspect-video"
         allowFullScreen
         allow="autoplay; encrypted-media; fullscreen"
-        referrerPolicy="no-referrer"
         data-testid="video-iframe-generic"
       />
     );
