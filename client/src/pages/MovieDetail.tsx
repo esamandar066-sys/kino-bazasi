@@ -76,6 +76,41 @@ export default function MovieDetail() {
     }
   };
 
+  const hasVideo = !!movie.videoUrl;
+
+  function getEmbedUrl(url: string): string | null {
+    if (url.includes("youtube.com/watch")) {
+      const id = new URL(url).searchParams.get("v");
+      return id ? `https://www.youtube.com/embed/${id}?autoplay=1` : null;
+    }
+    if (url.includes("youtu.be/")) {
+      const id = url.split("youtu.be/")[1]?.split("?")[0];
+      return id ? `https://www.youtube.com/embed/${id}?autoplay=1` : null;
+    }
+    if (url.includes("vimeo.com/")) {
+      const id = url.match(/vimeo\.com\/(\d+)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${id}?autoplay=1` : null;
+    }
+    if (url.includes("dailymotion.com/video/")) {
+      const id = url.match(/video\/([a-zA-Z0-9]+)/)?.[1];
+      return id ? `https://www.dailymotion.com/embed/video/${id}?autoplay=1` : null;
+    }
+    if (url.includes("drive.google.com")) {
+      const id = url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1]
+        || url.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
+      return id ? `https://drive.google.com/file/d/${id}/preview` : null;
+    }
+    if (url.includes("ok.ru/video/")) {
+      const id = url.match(/video\/(\d+)/)?.[1];
+      return id ? `https://ok.ru/videoembed/${id}` : null;
+    }
+    if (url.includes("rutube.ru/video/")) {
+      const id = url.match(/video\/([a-f0-9]+)/)?.[1];
+      return id ? `https://rutube.ru/play/embed/${id}` : null;
+    }
+    return null;
+  }
+
   const isLocalVideo = movie.videoUrl && movie.videoUrl.startsWith("/uploads/");
   const isDirectVideo = movie.videoUrl && (
     isLocalVideo ||
@@ -83,13 +118,7 @@ export default function MovieDetail() {
     movie.videoUrl.endsWith(".webm") ||
     movie.videoUrl.endsWith(".ogg")
   );
-  const isTrustedEmbed = movie.videoUrl && (
-    movie.videoUrl.includes("youtube.com") ||
-    movie.videoUrl.includes("youtu.be") ||
-    movie.videoUrl.includes("vimeo.com") ||
-    movie.videoUrl.includes("dailymotion.com")
-  );
-  const hasVideo = !!movie.videoUrl;
+  const embedUrl = movie.videoUrl ? getEmbedUrl(movie.videoUrl) : null;
 
   return (
     <div className="min-h-screen pb-20 relative z-10">
@@ -160,26 +189,24 @@ export default function MovieDetail() {
                   <source src={movie.videoUrl!} />
                   Brauzeringiz video formatini qo'llab-quvvatlamaydi.
                 </video>
-              ) : isTrustedEmbed ? (
+              ) : embedUrl ? (
+                <iframe
+                  src={embedUrl}
+                  className="w-full aspect-video"
+                  allowFullScreen
+                  allow="autoplay; encrypted-media; fullscreen"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"
+                  data-testid="video-iframe"
+                />
+              ) : (
                 <iframe
                   src={movie.videoUrl!}
                   className="w-full aspect-video"
                   allowFullScreen
-                  allow="autoplay; encrypted-media"
-                  data-testid="video-iframe"
+                  allow="autoplay; encrypted-media; fullscreen"
+                  sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"
+                  data-testid="video-iframe-generic"
                 />
-              ) : (
-                <div className="p-8 text-center">
-                  <a
-                    href={movie.videoUrl!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline text-lg"
-                    data-testid="link-external-video"
-                  >
-                    Videoni tashqi saytda ko'rish
-                  </a>
-                </div>
               )}
             </div>
           </div>
