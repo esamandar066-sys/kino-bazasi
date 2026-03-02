@@ -113,13 +113,25 @@ export default function MovieDetail() {
         || url.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
       return id ? `https://drive.google.com/file/d/${id}/preview` : null;
     }
-    if (url.includes("ok.ru/video/")) {
-      const id = url.match(/video\/(\d+)/)?.[1];
-      return id ? `https://ok.ru/videoembed/${id}` : null;
+    if (url.includes("ok.ru")) {
+      const videoId = url.match(/\/video\/(\d+)/)?.[1];
+      if (videoId) return `https://ok.ru/videoembed/${videoId}`;
+      const embedMatch = url.match(/\/videoembed\/(\d+)/)?.[1];
+      if (embedMatch) return url;
+      return null;
+    }
+    if (url.includes("vk.com") || url.includes("vkvideo.ru")) {
+      if (url.includes("/video_ext.php")) return url;
+      const oidVideo = url.match(/video(-?\d+)_(\d+)/);
+      if (oidVideo) return `https://vk.com/video_ext.php?oid=${oidVideo[1]}&id=${oidVideo[2]}`;
+      return null;
     }
     if (url.includes("rutube.ru/video/")) {
       const id = url.match(/video\/([a-f0-9]+)/)?.[1];
       return id ? `https://rutube.ru/play/embed/${id}` : null;
+    }
+    if (url.includes("iframe") || url.includes("embed")) {
+      return url;
     }
     return null;
   }
@@ -156,8 +168,7 @@ export default function MovieDetail() {
           src={embedUrl}
           className="w-full aspect-video"
           allowFullScreen
-          allow="autoplay; encrypted-media; fullscreen"
-          referrerPolicy="no-referrer"
+          allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           data-testid="video-iframe"
         />
       );
