@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "./storage";
+import { scrapeAndSaveMovies, getAvailableCategories } from "./scraper";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const ADMIN_ID = Number(process.env.TELEGRAM_ADMIN_ID!);
@@ -122,6 +123,9 @@ export function startTelegramBot(): void {
           [
             { text: "\u{1F4CA} Statistika", callback_data: "admin_stats" },
             { text: "\u{1F5D1} Kino o'chirish", callback_data: "admin_delete_movie" }
+          ],
+          [
+            { text: "\u{1F310} Kinolar yuklash", callback_data: "admin_scrape" }
           ],
           [
             { text: "\u{1F465} Foydalanuvchi rejimi", callback_data: "user_menu" }
@@ -596,6 +600,113 @@ export function startTelegramBot(): void {
       return;
     }
 
+    if (data === "admin_scrape") {
+      if (!isAdmin(chatId)) return;
+      const cats = getAvailableCategories();
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+      for (let i = 0; i < cats.length; i += 2) {
+        const row: TelegramBot.InlineKeyboardButton[] = [
+          { text: cats[i].name, callback_data: `scrape_cat_${cats[i].key}` }
+        ];
+        if (cats[i + 1]) {
+          row.push({ text: cats[i + 1].name, callback_data: `scrape_cat_${cats[i + 1].key}` });
+        }
+        keyboard.push(row);
+      }
+      keyboard.push([{ text: "\u{1F525} Barchasi (asosiy sahifa)", callback_data: "scrape_cat_all" }]);
+      keyboard.push([{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]);
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F310} *Kinolar yuklash*`,
+        ``,
+        `Qaysi kategoriyadan yuklash kerak?`
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data.startsWith("scrape_cat_")) {
+      if (!isAdmin(chatId)) return;
+      const catKey = data.replace("scrape_cat_", "");
+      adminState.set(chatId, {
+        step: "scrape_limit",
+        data: { category: catKey === "all" ? undefined : catKey }
+      });
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F522} Nechta kino yuklash kerak?`,
+        ``,
+        `Raqam kiriting (1-50):`
+      ].join("\n"), {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "5 ta", callback_data: "scrape_limit_5" },
+              { text: "10 ta", callback_data: "scrape_limit_10" },
+              { text: "20 ta", callback_data: "scrape_limit_20" }
+            ],
+            [{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data.startsWith("scrape_limit_")) {
+      if (!isAdmin(chatId)) return;
+      const state = adminState.get(chatId);
+      if (!state || state.step !== "scrape_limit") return;
+
+      const limit = Number(data.replace("scrape_limit_", ""));
+      adminState.delete(chatId);
+
+      await bot!.sendMessage(chatId, `\u{23F3} Kinolar yuklanmoqda... (${limit} tagacha)`);
+
+      try {
+        const result = await scrapeAndSaveMovies({
+          category: state.data.category,
+          limit,
+          userId: String(ADMIN_ID),
+        });
+
+        const lines = [
+          `\u{2705} *Yuklash yakunlandi!*`,
+          ``,
+          `\u{2795} Qo'shildi: ${result.added}`,
+          `\u{23ED} O'tkazildi (mavjud): ${result.skipped}`,
+          `\u{274C} Xatolik: ${result.errors}`,
+        ];
+
+        if (result.movies.length > 0) {
+          lines.push(``, `*Yangi kinolar:*`);
+          result.movies.forEach((m, i) => lines.push(`  ${i + 1}. ${m}`));
+        }
+
+        await bot!.sendMessage(chatId, lines.join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F310} Yana yuklash", callback_data: "admin_scrape" }],
+              [{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]
+            ]
+          }
+        });
+      } catch (err) {
+        console.error("Scrape error:", err);
+        await bot!.sendMessage(chatId, `\u{274C} Yuklashda xatolik yuz berdi: ${(err as Error).message}`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F504} Qayta urinish", callback_data: "admin_scrape" }],
+              [{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]
+            ]
+          }
+        });
+      }
+      return;
+    }
+
     // Category selection during add_movie
     if (data.startsWith("select_cat_")) {
       const state = adminState.get(chatId);
@@ -820,6 +931,71 @@ export function startTelegramBot(): void {
             inline_keyboard: [
               [{ text: "\u{1F525} Barcha kinolar", callback_data: "user_all_movies" }],
               [{ text: "\u{1F3E0} Bosh menyu", callback_data: isAdmin(chatId) ? "admin_menu" : "user_menu" }]
+            ]
+          }
+        });
+      }
+      return;
+    }
+
+    if (state.step === "scrape_limit") {
+      const parsed = Number(text);
+      if (isNaN(parsed) || parsed < 1 || parsed > 50) {
+        await bot!.sendMessage(chatId, "1 dan 50 gacha raqam kiriting:", {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "5 ta", callback_data: "scrape_limit_5" },
+                { text: "10 ta", callback_data: "scrape_limit_10" },
+                { text: "20 ta", callback_data: "scrape_limit_20" }
+              ],
+              [{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }]
+            ]
+          }
+        });
+        return;
+      }
+      const limit = parsed;
+      adminState.delete(chatId);
+
+      await bot!.sendMessage(chatId, `\u{23F3} Kinolar yuklanmoqda... (${limit} tagacha)`);
+
+      try {
+        const result = await scrapeAndSaveMovies({
+          category: state.data.category,
+          limit,
+          userId: String(ADMIN_ID),
+        });
+
+        const lines = [
+          `\u{2705} *Yuklash yakunlandi!*`,
+          ``,
+          `\u{2795} Qo'shildi: ${result.added}`,
+          `\u{23ED} O'tkazildi (mavjud): ${result.skipped}`,
+          `\u{274C} Xatolik: ${result.errors}`,
+        ];
+
+        if (result.movies.length > 0) {
+          lines.push(``, `*Yangi kinolar:*`);
+          result.movies.forEach((m, i) => lines.push(`  ${i + 1}. ${m}`));
+        }
+
+        await bot!.sendMessage(chatId, lines.join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F310} Yana yuklash", callback_data: "admin_scrape" }],
+              [{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]
+            ]
+          }
+        });
+      } catch (err) {
+        console.error("Scrape error:", err);
+        await bot!.sendMessage(chatId, `\u{274C} Yuklashda xatolik: ${(err as Error).message}`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F504} Qayta urinish", callback_data: "admin_scrape" }],
+              [{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]
             ]
           }
         });

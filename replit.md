@@ -75,9 +75,20 @@ client/public/
 - Manage categories
 - View statistics with top rated movies
 
+### Movie Scraping (admin only)
+- Scrape movies from external sources via Telegram bot
+- Select category or all movies
+- Choose limit (5, 10, 20, or custom number 1-50)
+- Auto-creates categories from source data
+- Skips duplicate movies (by title)
+- Scrapes: title, description, poster image, year, genre
+
 ### User Features (inline buttons)
 - Browse all movies
 - Search movies by name
 - Browse by category
 - View top rated movies
 - Direct links to view movie details in app
+
+## Key Files
+- `server/scraper.ts` - Movie scraping module (metadata extraction)

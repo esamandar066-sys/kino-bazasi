@@ -11,6 +11,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { startTelegramBot, getBotUsername, sendVerificationCode } from "./telegram-bot";
 import { sendSmsCode } from "./twilio-sms";
+import { scrapeAndSaveMovies, getAvailableCategories } from "./scraper";
 import { db } from "./db";
 import { users } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
