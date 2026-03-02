@@ -195,7 +195,7 @@ export default function MovieDetail() {
                   className="w-full aspect-video"
                   allowFullScreen
                   allow="autoplay; encrypted-media; fullscreen"
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"
+                  referrerPolicy="no-referrer"
                   data-testid="video-iframe"
                 />
               ) : (
@@ -204,7 +204,7 @@ export default function MovieDetail() {
                   className="w-full aspect-video"
                   allowFullScreen
                   allow="autoplay; encrypted-media; fullscreen"
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-presentation allow-forms"
+                  referrerPolicy="no-referrer"
                   data-testid="video-iframe-generic"
                 />
               )}
