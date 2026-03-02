@@ -844,12 +844,26 @@ export function startTelegramBot(): void {
 
     try {
       const video = msg.video!;
-      const maxSize = 50 * 1024 * 1024;
+      const maxSize = 20 * 1024 * 1024;
       if (video.file_size && video.file_size > maxSize) {
-        await bot!.sendMessage(chatId, `\u{274C} Video hajmi juda katta (max 50MB). URL kiriting yoki kichikroq fayl yuboring.`, {
+        const sizeMB = (video.file_size / (1024 * 1024)).toFixed(0);
+        await bot!.sendMessage(chatId, [
+          `\u{274C} Video hajmi juda katta (${sizeMB} MB).`,
+          ``,
+          `Telegram bot orqali faqat 20MB gacha fayl yuklab olish mumkin.`,
+          ``,
+          `\u{1F4A1} *Katta video uchun:*`,
+          `1. Videoni Google Drive ga yuklang`,
+          `2. "Har kimga ochiq" qiling`,
+          `3. Havolani shu yerga yuboring`,
+          ``,
+          `Yoki boshqa video hosting (YouTube, OK.ru) havolasini yuboring.`
+        ].join("\n"), {
+          parse_mode: "Markdown",
           reply_markup: {
             inline_keyboard: [
               [{ text: "\u{23ED} O'tkazish", callback_data: "skip_video" }],
+              [{ text: "\u{274C} Bekor qilish", callback_data: "admin_cancel" }],
             ]
           }
         });
@@ -939,9 +953,21 @@ export function startTelegramBot(): void {
       return;
     }
 
-    const maxSize = 50 * 1024 * 1024;
+    const maxSize = 20 * 1024 * 1024;
     if (doc.file_size && doc.file_size > maxSize) {
-      await bot!.sendMessage(chatId, `\u{274C} Video hajmi juda katta (max 50MB). URL kiriting yoki kichikroq fayl yuboring.`);
+      const sizeMB = (doc.file_size / (1024 * 1024)).toFixed(0);
+      await bot!.sendMessage(chatId, [
+        `\u{274C} Video hajmi juda katta (${sizeMB} MB).`,
+        ``,
+        `\u{1F4A1} Google Drive yoki boshqa hosting havolasini yuboring.`
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{23ED} O'tkazish", callback_data: "skip_video" }],
+          ]
+        }
+      });
       return;
     }
 
