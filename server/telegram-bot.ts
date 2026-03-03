@@ -3,7 +3,7 @@ import { storage } from "./storage";
 import { scrapeAndSaveMovies, getAvailableCategories } from "./scraper";
 import { db } from "./db";
 import { botUsers } from "@shared/schema";
-import { eq, sql, count } from "drizzle-orm";
+import { eq, sql, count, gte, and } from "drizzle-orm";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const ADMIN_ID = Number(process.env.TELEGRAM_ADMIN_ID!);
@@ -25,6 +25,62 @@ async function trackBotUser(msg: TelegramBot.Message) {
         set: { username, firstName, lastName, lastActive: new Date() }
       });
   } catch (e) {}
+}
+
+let dailyReportTimer: NodeJS.Timeout | null = null;
+
+async function sendDailyReport() {
+  if (!bot) return;
+  try {
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const [totalResult] = await db.select({ count: count() }).from(botUsers);
+    const totalUsers = totalResult?.count || 0;
+
+    const [newUsersResult] = await db.select({ count: count() }).from(botUsers)
+      .where(gte(botUsers.createdAt, yesterday));
+    const newUsers = newUsersResult?.count || 0;
+
+    const [activeResult] = await db.select({ count: count() }).from(botUsers)
+      .where(gte(botUsers.lastActive, yesterday));
+    const activeUsers = activeResult?.count || 0;
+
+    const movies = await storage.getMovies();
+    const totalRatings = movies.reduce((sum, m) => sum + (m.ratingCount || 0), 0);
+
+    const dateStr = `${yesterday.getDate().toString().padStart(2, '0')}.${(yesterday.getMonth() + 1).toString().padStart(2, '0')}.${yesterday.getFullYear()}`;
+
+    await bot.sendMessage(ADMIN_ID, [
+      `\u{1F4CA} *Kunlik hisobot*`,
+      `\u{1F4C5} ${dateStr}`,
+      ``,
+      `\u{1F465} Jami foydalanuvchilar: ${totalUsers}`,
+      `\u{1F195} Yangi qo'shilganlar: ${newUsers}`,
+      `\u{1F7E2} Faol foydalanuvchilar: ${activeUsers}`,
+      ``,
+      `\u{1F3AC} Jami kinolar: ${movies.length}`,
+      `\u{2B50} Jami baholar: ${totalRatings}`,
+    ].join("\n"), { parse_mode: "Markdown" });
+  } catch (err: any) {
+    console.error("Daily report error:", err?.message || err);
+  }
+}
+
+function scheduleDailyReport() {
+  if (dailyReportTimer) clearTimeout(dailyReportTimer);
+
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const msUntilMidnight = midnight.getTime() - now.getTime();
+
+  dailyReportTimer = setTimeout(() => {
+    sendDailyReport();
+    setInterval(sendDailyReport, 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
+
+  console.log(`Daily report scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`);
 }
 
 export function getBotUsername(): string {
@@ -90,6 +146,7 @@ export function startTelegramBot(): void {
   bot.getMe().then((me) => {
     botUsername = me.username || "";
     console.log(`Telegram bot started: @${botUsername}`);
+    scheduleDailyReport();
   });
 
   bot.onText(/\/start(.*)/, async (msg, match) => {
