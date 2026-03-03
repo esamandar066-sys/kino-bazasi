@@ -248,6 +248,7 @@ export function startTelegramBot(): void {
     const data = query.data || "";
     try { await bot!.answerCallbackQuery(query.id); } catch (e) {}
 
+    try {
     if (data.startsWith("telegram_verify_")) {
       const parts = data.replace("telegram_verify_", "").split("_");
       const code = parts.pop()!;
@@ -437,8 +438,8 @@ export function startTelegramBot(): void {
       const recentUsers = allUsers.slice(-10).reverse();
       let userList = "";
       recentUsers.forEach((u, i) => {
-        const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || "Nomsiz";
-        const uname = u.username ? `@${u.username}` : "";
+        const name = escapeMarkdown([u.firstName, u.lastName].filter(Boolean).join(" ") || "Nomsiz");
+        const uname = u.username ? `@${escapeMarkdown(u.username)}` : "";
         userList += `  ${i + 1}. ${name} ${uname}\n`;
       });
 
@@ -472,14 +473,14 @@ export function startTelegramBot(): void {
         });
         return;
       }
-      let text = `\u{1F465} *Barcha foydalanuvchilar (${allUsers.length}):*\n\n`;
+      let msgText = `\u{1F465} *Barcha foydalanuvchilar (${allUsers.length}):*\n\n`;
       allUsers.forEach((u, i) => {
-        const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || "Nomsiz";
-        const uname = u.username ? ` (@${u.username})` : "";
-        text += `${i + 1}. ${name}${uname}\n`;
+        const name = escapeMarkdown([u.firstName, u.lastName].filter(Boolean).join(" ") || "Nomsiz");
+        const uname = u.username ? ` (@${escapeMarkdown(u.username)})` : "";
+        msgText += `${i + 1}. ${name}${uname}\n`;
       });
-      if (text.length > 4000) text = text.substring(0, 4000) + "\n...";
-      await bot!.sendMessage(chatId, text, {
+      if (msgText.length > 4000) msgText = msgText.substring(0, 4000) + "\n...";
+      await bot!.sendMessage(chatId, msgText, {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_users" }]] }
       });
@@ -1022,6 +1023,10 @@ export function startTelegramBot(): void {
         });
       }
       return;
+    }
+    } catch (err: any) {
+      console.error("Callback query error:", err?.message || err);
+      try { await bot!.sendMessage(chatId, "Xatolik yuz berdi. Qaytadan urinib ko'ring."); } catch (e) {}
     }
   });
 
