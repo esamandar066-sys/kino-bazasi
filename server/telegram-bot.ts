@@ -246,7 +246,7 @@ export function startTelegramBot(): void {
     if (!chatId) return;
 
     const data = query.data || "";
-    await bot!.answerCallbackQuery(query.id);
+    try { await bot!.answerCallbackQuery(query.id); } catch (e) {}
 
     if (data.startsWith("telegram_verify_")) {
       const parts = data.replace("telegram_verify_", "").split("_");
@@ -1617,7 +1617,7 @@ export function startTelegramBot(): void {
     if (data === "select_cat_skip_year") {
       const state = adminState.get(chatId);
       if (!state) return;
-      await bot!.answerCallbackQuery(query.id);
+      try { await bot!.answerCallbackQuery(query.id); } catch (e) {}
       state.data.releaseYear = null;
       state.step = "image";
       await bot!.sendMessage(chatId, `\u{1F5BC} Rasm URL kiriting yoki rasm yuboring:`, {
@@ -1634,7 +1634,7 @@ export function startTelegramBot(): void {
     if (data === "select_cat_skip_image") {
       const state = adminState.get(chatId);
       if (!state) return;
-      await bot!.answerCallbackQuery(query.id);
+      try { await bot!.answerCallbackQuery(query.id); } catch (e) {}
       state.data.imageUrl = null;
       state.step = "video";
       await bot!.sendMessage(chatId, `\u{1F3AC} Video URL manzilini kiriting yoki video fayl yuboring:`, {
@@ -1651,7 +1651,7 @@ export function startTelegramBot(): void {
     if (data === "skip_video") {
       const state = adminState.get(chatId);
       if (!state) return;
-      await bot!.answerCallbackQuery(query.id);
+      try { await bot!.answerCallbackQuery(query.id); } catch (e) {}
       state.data.videoUrl = null;
       state.step = "category";
       await showCategorySelection(chatId);
