@@ -138,10 +138,20 @@ export function startTelegramBot(): void {
   if (bot) {
     try {
       bot.stopPolling();
+      bot.removeAllListeners();
     } catch {}
+    bot = null;
   }
 
-  bot = new TelegramBot(BOT_TOKEN, { polling: { params: { timeout: 10 } } });
+  bot = new TelegramBot(BOT_TOKEN, { polling: { params: { timeout: 10 }, interval: 2000 } });
+
+  bot.on("polling_error", (err: any) => {
+    if (err?.message?.includes("409 Conflict")) {
+      console.log("Another bot instance detected, will retry...");
+    } else {
+      console.error("Polling error:", err?.message || err);
+    }
+  });
 
   bot.getMe().then((me) => {
     botUsername = me.username || "";
