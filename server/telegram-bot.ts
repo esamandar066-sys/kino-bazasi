@@ -305,6 +305,7 @@ export function startTelegramBot(): void {
             { text: "\u{1F310} Kinolar yuklash", callback_data: "admin_scrape" }
           ],
           [
+            { text: "\u{1F3C6} Konkurs reytingi", callback_data: "admin_contest_leaderboard" },
             { text: "\u{1F4E2} Xabar yuborish", callback_data: "admin_broadcast" }
           ],
           [
@@ -642,6 +643,82 @@ export function startTelegramBot(): void {
       await bot!.sendMessage(chatId, msgText, {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: [[{ text: "\u{25C0} Orqaga", callback_data: "admin_users" }]] }
+      });
+      return;
+    }
+
+    if (data === "admin_contest_leaderboard") {
+      if (!isAdmin(chatId)) return;
+
+      const allTimeRefs = await db.select({
+        referrerChatId: referrals.referrerChatId,
+        count: count(),
+      }).from(referrals)
+        .groupBy(referrals.referrerChatId)
+        .orderBy(desc(count()))
+        .limit(20);
+
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weeklyRefs = await db.select({
+        referrerChatId: referrals.referrerChatId,
+        count: count(),
+      }).from(referrals)
+        .where(gte(referrals.createdAt, weekStart))
+        .groupBy(referrals.referrerChatId)
+        .orderBy(desc(count()))
+        .limit(20);
+
+      let weeklyText = "";
+      for (let i = 0; i < weeklyRefs.length; i++) {
+        const ref = weeklyRefs[i];
+        const [u] = await db.select().from(botUsers).where(eq(botUsers.chatId, ref.referrerChatId));
+        const name = [u?.firstName, u?.lastName].filter(Boolean).join(" ") || "Nomsiz";
+        const uname = u?.username ? ` (@${u.username})` : "";
+        const medal = i === 0 ? "\u{1F947}" : i === 1 ? "\u{1F948}" : i === 2 ? "\u{1F949}" : `${i + 1}.`;
+        const bal = u?.balance || 0;
+        weeklyText += `${medal} ${name}${uname} \u2014 ${ref.count} ta | ${bal} so'm\n`;
+      }
+
+      let allTimeText = "";
+      for (let i = 0; i < allTimeRefs.length; i++) {
+        const ref = allTimeRefs[i];
+        const [u] = await db.select().from(botUsers).where(eq(botUsers.chatId, ref.referrerChatId));
+        const name = [u?.firstName, u?.lastName].filter(Boolean).join(" ") || "Nomsiz";
+        const uname = u?.username ? ` (@${u.username})` : "";
+        const totalE = u?.totalEarned || 0;
+        allTimeText += `${i + 1}. ${name}${uname} \u2014 ${ref.count} ta | ${totalE} so'm\n`;
+      }
+
+      const totalReferrals = await db.select({ count: count() }).from(referrals);
+      const totalUsers = await db.select({ count: count() }).from(botUsers);
+      const pendingWd = await db.select({ count: count() }).from(withdrawals).where(eq(withdrawals.status, "pending"));
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F3C6} *KONKURS REYTINGI*`,
+        ``,
+        `\u{1F465} Jami foydalanuvchilar: *${totalUsers[0].count}*`,
+        `\u{1F517} Jami referallar: *${totalReferrals[0].count}*`,
+        `\u{1F4B3} Kutilayotgan so'rovlar: *${pendingWd[0].count}*`,
+        ``,
+        `\u{1F4C5} *HAFTALIK REYTING:*`,
+        ``,
+        weeklyText || "  Hozircha hech kim taklif qilmagan",
+        ``,
+        `\u{1F4CA} *UMUMIY REYTING:*`,
+        ``,
+        allTimeText || "  Hozircha hech kim taklif qilmagan",
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{1F504} Yangilash", callback_data: "admin_contest_leaderboard" }],
+            [{ text: "\u{25C0} Orqaga", callback_data: "admin_menu" }]
+          ]
+        }
       });
       return;
     }
