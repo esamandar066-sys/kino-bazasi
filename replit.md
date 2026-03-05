@@ -105,7 +105,7 @@ client/public/
 
 ### Referral System
 - Each user gets unique referral code (ref_{chatId}_{random})
-- 150 so'm per successful referral
+- 500 so'm per successful referral
 - Weekly contest: top referrer wins
-- Withdrawal to card (admin approval required)
+- Withdrawal to card (min 10,000 so'm, admin approval required)
 - Tables: referrals, withdrawals, bot_users (balance, referral_code, etc.)

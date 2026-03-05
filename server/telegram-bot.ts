@@ -12,7 +12,7 @@ let bot: TelegramBot | null = null;
 let botUsername: string = "";
 const userChatIds: Map<string, number> = new Map();
 
-const REFERRAL_REWARD = 150;
+const REFERRAL_REWARD = 500;
 
 function generateReferralCode(chatId: string): string {
   return `ref_${chatId}_${Math.random().toString(36).slice(2, 6)}`;
@@ -942,13 +942,13 @@ export function startTelegramBot(): void {
       const [user] = await db.select().from(botUsers).where(eq(botUsers.chatId, String(chatId)));
       const balance = user?.balance || 0;
 
-      if (balance < 1000) {
+      if (balance < 10000) {
         await bot!.sendMessage(chatId, [
-          `\u{1F4B3} *Pul yechish*`,
+          `\\u{1F4B3} *Pul yechish*`,
           ``,
           `\u{274C} Sizning balansigiz: *${balance} so'm*`,
           ``,
-          `Kamida *1000 so'm* bo'lganda pul yechish mumkin.`,
+          `Kamida *10 000 so'm* bo'lganda pul yechish mumkin.`,
           `\u{1F4A1} Do'stlaringizni taklif qilib balansni to'ldiring!`,
         ].join("\n"), {
           parse_mode: "Markdown",
@@ -968,7 +968,7 @@ export function startTelegramBot(): void {
         ``,
         `\u{1F4B5} Balansigiz: *${balance} so'm*`,
         ``,
-        `Qancha pul yechmoqchisiz? (kamida 1000 so'm)`,
+        `Qancha pul yechmoqchisiz? (kamida 10 000 so'm)`,
       ].join("\n"), {
         parse_mode: "Markdown",
         reply_markup: {
@@ -1932,6 +1932,73 @@ export function startTelegramBot(): void {
           }
         });
       }
+      return;
+    }
+
+    if (state.step === "withdraw_amount") {
+      const amount = Number(text.replace(/\s/g, ""));
+      if (isNaN(amount) || amount < 10000) {
+        await bot!.sendMessage(chatId, "\u{274C} Kamida *10 000 so'm* kiriting.", {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]]
+          }
+        });
+        return;
+      }
+      if (amount > (state.data.balance || 0)) {
+        await bot!.sendMessage(chatId, `\u{274C} Balansda yetarli mablag' yo'q. Balans: *${state.data.balance} so'm*`, {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]]
+          }
+        });
+        return;
+      }
+      state.data.amount = amount;
+      state.step = "withdraw_card";
+      await bot!.sendMessage(chatId, [
+        `\u{1F4B3} Karta raqamingizni kiriting:`,
+        ``,
+        `Masalan: \`8600 1234 5678 9012\``,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]]
+        }
+      });
+      return;
+    }
+
+    if (state.step === "withdraw_card") {
+      const cardNumber = text.replace(/\s/g, "").trim();
+      if (cardNumber.length < 16 || !/^\d+$/.test(cardNumber)) {
+        await bot!.sendMessage(chatId, "\u{274C} Iltimos, to'g'ri karta raqamini kiriting (16 raqam):", {
+          reply_markup: {
+            inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]]
+          }
+        });
+        return;
+      }
+      state.data.cardNumber = cardNumber;
+      state.step = "withdraw_confirm";
+      const formatted = cardNumber.replace(/(\d{4})/g, "$1 ").trim();
+      await bot!.sendMessage(chatId, [
+        `\u{1F4B3} *Tasdiqlang:*`,
+        ``,
+        `\u{1F4B5} Miqdor: *${state.data.amount} so'm*`,
+        `\u{1F4B3} Karta: \`${formatted}\``,
+        ``,
+        `To'g'rimi?`,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{2705} Tasdiqlash", callback_data: `confirm_withdraw_${chatId}` }],
+            [{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]
+          ]
+        }
+      });
       return;
     }
 

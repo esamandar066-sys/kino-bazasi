@@ -61,7 +61,7 @@ export const referrals = pgTable("referrals", {
   id: serial("id").primaryKey(),
   referrerChatId: varchar("referrer_chat_id").notNull(),
   referredChatId: varchar("referred_chat_id").notNull().unique(),
-  reward: integer("reward").notNull().default(150),
+  reward: integer("reward").notNull().default(500),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
