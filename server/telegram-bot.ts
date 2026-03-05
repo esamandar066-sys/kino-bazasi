@@ -2,8 +2,8 @@ import TelegramBot from "node-telegram-bot-api";
 import { storage } from "./storage";
 import { scrapeAndSaveMovies, getAvailableCategories } from "./scraper";
 import { db } from "./db";
-import { botUsers } from "@shared/schema";
-import { eq, sql, count, gte, and } from "drizzle-orm";
+import { botUsers, referrals, withdrawals } from "@shared/schema";
+import { eq, sql, count, gte, and, desc } from "drizzle-orm";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const ADMIN_ID = Number(process.env.TELEGRAM_ADMIN_ID!);
@@ -12,19 +12,71 @@ let bot: TelegramBot | null = null;
 let botUsername: string = "";
 const userChatIds: Map<string, number> = new Map();
 
+const REFERRAL_REWARD = 150;
+
+function generateReferralCode(chatId: string): string {
+  return `ref_${chatId}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
 async function trackBotUser(msg: TelegramBot.Message) {
   const chatId = String(msg.chat.id);
   const username = msg.from?.username || null;
   const firstName = msg.from?.first_name || null;
   const lastName = msg.from?.last_name || null;
   try {
-    await db.insert(botUsers)
-      .values({ chatId, username, firstName, lastName })
-      .onConflictDoUpdate({
-        target: botUsers.chatId,
-        set: { username, firstName, lastName, lastActive: new Date() }
-      });
+    const existing = await db.select().from(botUsers).where(eq(botUsers.chatId, chatId));
+    if (existing.length === 0) {
+      const refCode = generateReferralCode(chatId);
+      await db.insert(botUsers)
+        .values({ chatId, username, firstName, lastName, referralCode: refCode, balance: 0, totalEarned: 0, referralCount: 0 });
+    } else {
+      await db.update(botUsers)
+        .set({ username, firstName, lastName, lastActive: new Date() })
+        .where(eq(botUsers.chatId, chatId));
+      if (!existing[0].referralCode) {
+        const refCode = generateReferralCode(chatId);
+        await db.update(botUsers).set({ referralCode: refCode }).where(eq(botUsers.chatId, chatId));
+      }
+    }
   } catch (e) {}
+}
+
+async function processReferral(newChatId: string, referrerCode: string) {
+  try {
+    const [referrer] = await db.select().from(botUsers).where(eq(botUsers.referralCode, referrerCode));
+    if (!referrer) return;
+    if (referrer.chatId === newChatId) return;
+
+    const [existingRef] = await db.select().from(referrals).where(eq(referrals.referredChatId, newChatId));
+    if (existingRef) return;
+
+    await db.insert(referrals).values({
+      referrerChatId: referrer.chatId,
+      referredChatId: newChatId,
+      reward: REFERRAL_REWARD,
+    });
+
+    await db.update(botUsers).set({
+      balance: sql`${botUsers.balance} + ${REFERRAL_REWARD}`,
+      totalEarned: sql`${botUsers.totalEarned} + ${REFERRAL_REWARD}`,
+      referralCount: sql`${botUsers.referralCount} + 1`,
+    }).where(eq(botUsers.chatId, referrer.chatId));
+
+    await db.update(botUsers).set({ referredBy: referrer.chatId }).where(eq(botUsers.chatId, newChatId));
+
+    if (bot) {
+      try {
+        await bot.sendMessage(Number(referrer.chatId), [
+          `\u{1F389} *Yangi taklif!*`,
+          ``,
+          `Sizning havolangiz orqali yangi foydalanuvchi qo'shildi!`,
+          `\u{1F4B0} +${REFERRAL_REWARD} so'm balansga qo'shildi.`,
+        ].join("\n"), { parse_mode: "Markdown" });
+      } catch {}
+    }
+  } catch (e) {
+    console.error("Referral error:", e);
+  }
 }
 
 let dailyReportTimer: NodeJS.Timeout | null = null;
@@ -164,6 +216,16 @@ export function startTelegramBot(): void {
     const param = match?.[1]?.trim();
     trackBotUser(msg);
 
+    if (param && param.startsWith("ref_")) {
+      await processReferral(String(chatId), param);
+      if (isAdmin(chatId)) {
+        await sendAdminMenu(chatId);
+      } else {
+        await sendUserMenu(chatId);
+      }
+      return;
+    }
+
     if (param && param.startsWith("verify_")) {
       const phoneNumber = param.replace("verify_", "");
       userChatIds.set(phoneNumber, chatId);
@@ -247,6 +309,14 @@ export function startTelegramBot(): void {
           [
             { text: "\u{1F4C1} Kategoriyalar", callback_data: "user_categories" },
             { text: "\u{2B50} Top reytinglar", callback_data: "user_top_rated" }
+          ],
+          [
+            { text: "\u{1F4B0} Balansim", callback_data: "user_balance" },
+            { text: "\u{1F517} Referal", callback_data: "user_referral" }
+          ],
+          [
+            { text: "\u{1F3C6} Konkurs", callback_data: "user_contest" },
+            { text: "\u{1F4B3} Pul yechish", callback_data: "user_withdraw" }
           ],
           [
             { text: "\u{1F310} Ilovani ochish", url: `https://${process.env.REPLIT_DOMAINS?.split(",")[0] || "kinolar.replit.app"}` }
@@ -754,6 +824,280 @@ export function startTelegramBot(): void {
         parse_mode: "Markdown",
         reply_markup: { inline_keyboard: keyboard }
       });
+      return;
+    }
+
+    if (data === "user_balance") {
+      const [user] = await db.select().from(botUsers).where(eq(botUsers.chatId, String(chatId)));
+      const balance = user?.balance || 0;
+      const totalEarned = user?.totalEarned || 0;
+      const refCount = user?.referralCount || 0;
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F4B0} *Sizning balansigiz*`,
+        ``,
+        `\u{1F4B5} Hozirgi balans: *${balance} so'm*`,
+        `\u{1F4C8} Jami ishlagan: ${totalEarned} so'm`,
+        `\u{1F465} Taklif qilganlar: ${refCount} ta odam`,
+        ``,
+        `\u{1F4A1} Har bir taklif qilgan odamingiz uchun *${REFERRAL_REWARD} so'm* olasiz!`,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{1F517} Referal havolam", callback_data: "user_referral" }],
+            [{ text: "\u{1F4B3} Pul yechish", callback_data: "user_withdraw" }],
+            [{ text: "\u{25C0} Orqaga", callback_data: "user_menu" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data === "user_referral") {
+      const [user] = await db.select().from(botUsers).where(eq(botUsers.chatId, String(chatId)));
+      let refCode = user?.referralCode;
+      if (!refCode) {
+        refCode = generateReferralCode(String(chatId));
+        await db.update(botUsers).set({ referralCode: refCode }).where(eq(botUsers.chatId, String(chatId)));
+      }
+      const botName = botUsername || "MovaApps_bot";
+      const refLink = `https://t.me/${botName}?start=${refCode}`;
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F517} *Sizning referal havolangiz:*`,
+        ``,
+        `\`${refLink}\``,
+        ``,
+        `\u{1F465} Taklif qilganlar: *${user?.referralCount || 0}* ta`,
+        `\u{1F4B0} Har biri uchun: *${REFERRAL_REWARD} so'm*`,
+        ``,
+        `\u{1F4A1} Bu havolani do'stlaringizga yuboring. Ular botga qo'shilganda sizga avtomatik ${REFERRAL_REWARD} so'm tushadi!`,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{1F4E4} Ulashish", switch_inline_query: `\u{1F3AC} Kinolar ilovasiga qo'shiling va kinolarni bepul ko'ring! ${refLink}` }],
+            [{ text: "\u{1F4B0} Balansim", callback_data: "user_balance" }],
+            [{ text: "\u{25C0} Orqaga", callback_data: "user_menu" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data === "user_contest") {
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weeklyRefs = await db.select({
+        referrerChatId: referrals.referrerChatId,
+        count: count(),
+      }).from(referrals)
+        .where(gte(referrals.createdAt, weekStart))
+        .groupBy(referrals.referrerChatId)
+        .orderBy(desc(count()))
+        .limit(10);
+
+      let leaderboard = "";
+      for (let i = 0; i < weeklyRefs.length; i++) {
+        const ref = weeklyRefs[i];
+        const [u] = await db.select().from(botUsers).where(eq(botUsers.chatId, ref.referrerChatId));
+        const name = escapeMarkdown([u?.firstName, u?.lastName].filter(Boolean).join(" ") || "Nomsiz");
+        const medal = i === 0 ? "\u{1F947}" : i === 1 ? "\u{1F948}" : i === 2 ? "\u{1F949}" : `${i + 1}.`;
+        const isMe = ref.referrerChatId === String(chatId) ? " \u{25C0} (siz)" : "";
+        leaderboard += `${medal} ${name} — ${ref.count} ta taklif${isMe}\n`;
+      }
+
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      const daysLeft = Math.ceil((weekEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      await bot!.sendMessage(chatId, [
+        `\u{1F3C6} *Haftalik konkurs*`,
+        ``,
+        `\u{23F3} Tugashiga: *${daysLeft} kun* qoldi`,
+        `\u{1F947} 1-o'rin: *Eng ko'p taklif qilgan g'olib!*`,
+        ``,
+        `\u{1F4CA} *Haftalik reyting:*`,
+        ``,
+        leaderboard || "  Hozircha hech kim taklif qilmagan",
+        ``,
+        `\u{1F4A1} Do'stlaringizni taklif qilib, birinchi o'rinni egallang!`,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "\u{1F517} Referal havolam", callback_data: "user_referral" }],
+            [{ text: "\u{25C0} Orqaga", callback_data: "user_menu" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data === "user_withdraw") {
+      const [user] = await db.select().from(botUsers).where(eq(botUsers.chatId, String(chatId)));
+      const balance = user?.balance || 0;
+
+      if (balance < 1000) {
+        await bot!.sendMessage(chatId, [
+          `\u{1F4B3} *Pul yechish*`,
+          ``,
+          `\u{274C} Sizning balansigiz: *${balance} so'm*`,
+          ``,
+          `Kamida *1000 so'm* bo'lganda pul yechish mumkin.`,
+          `\u{1F4A1} Do'stlaringizni taklif qilib balansni to'ldiring!`,
+        ].join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{1F517} Referal havolam", callback_data: "user_referral" }],
+              [{ text: "\u{25C0} Orqaga", callback_data: "user_menu" }]
+            ]
+          }
+        });
+        return;
+      }
+
+      adminState.set(chatId, { step: "withdraw_amount", data: { balance } });
+      await bot!.sendMessage(chatId, [
+        `\u{1F4B3} *Pul yechish*`,
+        ``,
+        `\u{1F4B5} Balansigiz: *${balance} so'm*`,
+        ``,
+        `Qancha pul yechmoqchisiz? (kamida 1000 so'm)`,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: `\u{1F4B0} Hammasini yechish (${balance} so'm)`, callback_data: `withdraw_all_${balance}` }],
+            [{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data.startsWith("withdraw_all_")) {
+      const amount = Number(data.replace("withdraw_all_", ""));
+      const state = adminState.get(chatId);
+      if (state) {
+        state.data.amount = amount;
+        state.step = "withdraw_card";
+        await bot!.sendMessage(chatId, [
+          `\u{1F4B3} Karta raqamingizni kiriting:`,
+          ``,
+          `Masalan: \`8600 1234 5678 9012\``,
+        ].join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]]
+          }
+        });
+      }
+      return;
+    }
+
+    if (data.startsWith("confirm_withdraw_")) {
+      const state = adminState.get(chatId);
+      if (!state || state.step !== "withdraw_confirm") return;
+      const { amount, cardNumber } = state.data;
+
+      const [user] = await db.select().from(botUsers).where(eq(botUsers.chatId, String(chatId)));
+      if (!user || (user.balance || 0) < amount) {
+        adminState.delete(chatId);
+        await bot!.sendMessage(chatId, "\u{274C} Balansda yetarli mablag' yo'q.");
+        return;
+      }
+
+      await db.update(botUsers).set({
+        balance: sql`${botUsers.balance} - ${amount}`,
+      }).where(eq(botUsers.chatId, String(chatId)));
+
+      await db.insert(withdrawals).values({
+        chatId: String(chatId),
+        amount,
+        cardNumber,
+      });
+
+      adminState.delete(chatId);
+
+      const userName = escapeMarkdown([user.firstName, user.lastName].filter(Boolean).join(" ") || "Nomsiz");
+      await bot!.sendMessage(chatId, [
+        `\u{2705} *So'rov qabul qilindi!*`,
+        ``,
+        `\u{1F4B5} Miqdor: *${amount} so'm*`,
+        `\u{1F4B3} Karta: \`${cardNumber}\``,
+        ``,
+        `\u{23F3} Admin tekshirib, 24 soat ichida o'tkazadi.`,
+      ].join("\n"), {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [[{ text: "\u{25C0} Bosh menyu", callback_data: "user_menu" }]]
+        }
+      });
+
+      try {
+        await bot!.sendMessage(ADMIN_ID, [
+          `\u{1F4B3} *Yangi pul yechish so'rovi!*`,
+          ``,
+          `\u{1F464} Foydalanuvchi: ${userName}`,
+          `\u{1F4AC} Chat ID: ${chatId}`,
+          `\u{1F4B5} Miqdor: *${amount} so'm*`,
+          `\u{1F4B3} Karta: \`${cardNumber}\``,
+        ].join("\n"), {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "\u{2705} To'landi", callback_data: `admin_paid_${chatId}` }],
+              [{ text: "\u{274C} Rad etish", callback_data: `admin_reject_${chatId}` }]
+            ]
+          }
+        });
+      } catch {}
+      return;
+    }
+
+    if (data.startsWith("admin_paid_")) {
+      if (!isAdmin(chatId)) return;
+      const targetChatId = data.replace("admin_paid_", "");
+      await db.update(withdrawals).set({ status: "paid" })
+        .where(and(eq(withdrawals.chatId, targetChatId), eq(withdrawals.status, "pending")));
+      try {
+        await bot!.sendMessage(Number(targetChatId), [
+          `\u{2705} *Pul o'tkazildi!*`,
+          ``,
+          `Sizning so'rovingiz bajarildi. Pul kartangizga o'tkazildi.`,
+        ].join("\n"), { parse_mode: "Markdown" });
+      } catch {}
+      await bot!.sendMessage(chatId, "\u{2705} To'lov bajarildi deb belgilandi.");
+      return;
+    }
+
+    if (data.startsWith("admin_reject_")) {
+      if (!isAdmin(chatId)) return;
+      const targetChatId = data.replace("admin_reject_", "");
+      const [wd] = await db.select().from(withdrawals)
+        .where(and(eq(withdrawals.chatId, targetChatId), eq(withdrawals.status, "pending")))
+        .orderBy(desc(withdrawals.createdAt)).limit(1);
+      if (wd) {
+        await db.update(withdrawals).set({ status: "rejected" }).where(eq(withdrawals.id, wd.id));
+        await db.update(botUsers).set({
+          balance: sql`${botUsers.balance} + ${wd.amount}`,
+        }).where(eq(botUsers.chatId, targetChatId));
+        try {
+          await bot!.sendMessage(Number(targetChatId), [
+            `\u{274C} *So'rov rad etildi*`,
+            ``,
+            `Sizning pul yechish so'rovingiz rad etildi.`,
+            `\u{1F4B5} ${wd.amount} so'm balansga qaytarildi.`,
+          ].join("\n"), { parse_mode: "Markdown" });
+        } catch {}
+      }
+      await bot!.sendMessage(chatId, "\u{274C} So'rov rad etildi, pul qaytarildi.");
       return;
     }
 

@@ -48,7 +48,29 @@ export const botUsers = pgTable("bot_users", {
   username: text("username"),
   firstName: text("first_name"),
   lastName: text("last_name"),
+  balance: integer("balance").default(0),
+  totalEarned: integer("total_earned").default(0),
+  referralCode: text("referral_code").unique(),
+  referredBy: varchar("referred_by"),
+  referralCount: integer("referral_count").default(0),
   lastActive: timestamp("last_active").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const referrals = pgTable("referrals", {
+  id: serial("id").primaryKey(),
+  referrerChatId: varchar("referrer_chat_id").notNull(),
+  referredChatId: varchar("referred_chat_id").notNull().unique(),
+  reward: integer("reward").notNull().default(150),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const withdrawals = pgTable("withdrawals", {
+  id: serial("id").primaryKey(),
+  chatId: varchar("chat_id").notNull(),
+  amount: integer("amount").notNull(),
+  cardNumber: text("card_number").notNull(),
+  status: text("status").notNull().default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

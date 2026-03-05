@@ -182,6 +182,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEpisode(data: InsertEpisode): Promise<Episode> {
+    const existing = await db.select().from(episodes)
+      .where(and(eq(episodes.movieId, data.movieId), eq(episodes.episodeNumber, data.episodeNumber)));
+    if (existing.length > 0) {
+      throw new Error(`${data.episodeNumber}-qism allaqachon mavjud`);
+    }
     const [ep] = await db.insert(episodes).values(data).returning();
     await db.update(movies).set({ isSerial: true }).where(eq(movies.id, data.movieId));
     return ep;

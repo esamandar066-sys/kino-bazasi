@@ -85,9 +85,27 @@ client/public/
 - View statistics with top rated movies
 - Scrape movies from external sources
 
+### Episode Management (Admin)
+- "Qismlar" button on movie cards to view/manage episodes
+- Add episode flow: episode number → title (optional) → video URL
+- List all episodes for a movie with delete option
+- Auto-sets isSerial flag when episodes are added
+- Duplicate episode number validation
+
 ### User Features (inline buttons)
 - Browse all movies
 - Search movies by name
 - Browse by category
 - View top rated movies
+- Balance check (referral earnings)
+- Referral link generation and sharing
+- Weekly contest leaderboard
+- Withdrawal requests (min 1000 so'm)
 - Direct links to view movie details in app
+
+### Referral System
+- Each user gets unique referral code (ref_{chatId}_{random})
+- 150 so'm per successful referral
+- Weekly contest: top referrer wins
+- Withdrawal to card (admin approval required)
+- Tables: referrals, withdrawals, bot_users (balance, referral_code, etc.)
