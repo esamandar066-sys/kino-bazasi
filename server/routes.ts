@@ -9,7 +9,7 @@ import { registerAuthRoutes } from "./replit_integrations/auth";
 import { setupAuth } from "./replit_integrations/auth/replitAuth";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { startTelegramBot, getBotUsername, sendVerificationCode } from "./telegram-bot";
+import { startTelegramBot, getBotUsername, sendVerificationCode, broadcastToAllUsers } from "./telegram-bot";
 import { sendSmsCode } from "./twilio-sms";
 import { scrapeAndSaveMovies, getAvailableCategories } from "./scraper";
 import { db } from "./db";
@@ -391,6 +391,20 @@ export async function registerRoutes(
       res.download(apkPath, "Kinolar.apk");
     } else {
       res.status(404).json({ message: "APK fayl hali yuklanmagan" });
+    }
+  });
+
+  app.post("/api/admin/broadcast-contest", async (req: any, res) => {
+    try {
+      const adminSecret = req.headers["x-admin-secret"];
+      if (adminSecret !== process.env.SESSION_SECRET) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const { photoPath, caption } = req.body;
+      const result = await broadcastToAllUsers(photoPath, caption);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ message: "Broadcast failed" });
     }
   });
 

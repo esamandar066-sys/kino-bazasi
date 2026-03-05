@@ -12,7 +12,9 @@ let bot: TelegramBot | null = null;
 let botUsername: string = "";
 const userChatIds: Map<string, number> = new Map();
 
-const REFERRAL_REWARD = 500;
+const REFERRAL_REWARD = 2000;
+const CONTEST_BONUS = 10000;
+const MIN_WITHDRAW = 50000;
 
 function generateReferralCode(chatId: string): string {
   return `ref_${chatId}_${Math.random().toString(36).slice(2, 6)}`;
@@ -133,6 +135,26 @@ function scheduleDailyReport() {
   }, msUntilMidnight);
 
   console.log(`Daily report scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`);
+}
+
+export async function broadcastToAllUsers(photoPath: string, caption: string): Promise<{sent: number; failed: number; total: number}> {
+  if (!bot) return { sent: 0, failed: 0, total: 0 };
+  const allUsers = await db.select().from(botUsers);
+  let sent = 0;
+  let failed = 0;
+  for (const user of allUsers) {
+    try {
+      await bot.sendPhoto(Number(user.chatId), photoPath, {
+        caption,
+        parse_mode: "Markdown",
+      });
+      sent++;
+      await new Promise(r => setTimeout(r, 50));
+    } catch (e) {
+      failed++;
+    }
+  }
+  return { sent, failed, total: allUsers.length };
 }
 
 export function getBotUsername(): string {
@@ -916,16 +938,23 @@ export function startTelegramBot(): void {
       const daysLeft = Math.ceil((weekEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
       await bot!.sendMessage(chatId, [
-        `\u{1F3C6} *Haftalik konkurs*`,
+        `\u{1F3C6} *HAFTALIK KONKURS*`,
         ``,
         `\u{23F3} Tugashiga: *${daysLeft} kun* qoldi`,
-        `\u{1F947} 1-o'rin: *Eng ko'p taklif qilgan g'olib!*`,
+        ``,
+        `\u{1F381} *SOVG'ALAR:*`,
+        `\u{1F947} 1-o'rin: *100 000 so'm*`,
+        `\u{1F948} 2-o'rin: *50 000 so'm*`,
+        `\u{1F949} 3-o'rin: *25 000 so'm*`,
+        ``,
+        `\u{1F4B0} Har bir taklif: *${REFERRAL_REWARD.toLocaleString()} so'm*`,
+        `\u{1F381} Ishtirok bonusi: *${CONTEST_BONUS.toLocaleString()} so'm*`,
         ``,
         `\u{1F4CA} *Haftalik reyting:*`,
         ``,
         leaderboard || "  Hozircha hech kim taklif qilmagan",
         ``,
-        `\u{1F4A1} Do'stlaringizni taklif qilib, birinchi o'rinni egallang!`,
+        `\\u{1F4A1} Do'stlaringizni taklif qilib, birinchi o'rinni egallang!`,
       ].join("\n"), {
         parse_mode: "Markdown",
         reply_markup: {
@@ -942,13 +971,13 @@ export function startTelegramBot(): void {
       const [user] = await db.select().from(botUsers).where(eq(botUsers.chatId, String(chatId)));
       const balance = user?.balance || 0;
 
-      if (balance < 10000) {
+      if (balance < MIN_WITHDRAW) {
         await bot!.sendMessage(chatId, [
           `\\u{1F4B3} *Pul yechish*`,
           ``,
           `\u{274C} Sizning balansigiz: *${balance} so'm*`,
           ``,
-          `Kamida *10 000 so'm* bo'lganda pul yechish mumkin.`,
+          `Kamida *${MIN_WITHDRAW.toLocaleString()} so'm* bo'lganda pul yechish mumkin.`,
           `\u{1F4A1} Do'stlaringizni taklif qilib balansni to'ldiring!`,
         ].join("\n"), {
           parse_mode: "Markdown",
@@ -968,7 +997,7 @@ export function startTelegramBot(): void {
         ``,
         `\u{1F4B5} Balansigiz: *${balance} so'm*`,
         ``,
-        `Qancha pul yechmoqchisiz? (kamida 10 000 so'm)`,
+        `Qancha pul yechmoqchisiz? (kamida ${MIN_WITHDRAW.toLocaleString()} so'm)`,
       ].join("\n"), {
         parse_mode: "Markdown",
         reply_markup: {
@@ -1937,8 +1966,8 @@ export function startTelegramBot(): void {
 
     if (state.step === "withdraw_amount") {
       const amount = Number(text.replace(/\s/g, ""));
-      if (isNaN(amount) || amount < 10000) {
-        await bot!.sendMessage(chatId, "\u{274C} Kamida *10 000 so'm* kiriting.", {
+      if (isNaN(amount) || amount < MIN_WITHDRAW) {
+        await bot!.sendMessage(chatId, `\u{274C} Kamida *${MIN_WITHDRAW.toLocaleString()} so'm* kiriting.`, {
           parse_mode: "Markdown",
           reply_markup: {
             inline_keyboard: [[{ text: "\u{274C} Bekor qilish", callback_data: "user_menu" }]]
